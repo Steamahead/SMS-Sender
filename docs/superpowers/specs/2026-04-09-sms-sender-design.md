@@ -24,7 +24,7 @@ Aplikacja desktopowa do wysyłania SMS-ów z komputera przez Windows Phone Link.
 │           │                         │
 │           ▼                         │
 │     PhoneLinkSender                 │
-│    (PyAutoGUI automation)           │
+│    (pywinauto UIA automation)       │
 └─────────────────────────────────────┘
 ```
 
@@ -33,7 +33,7 @@ Aplikacja desktopowa do wysyłania SMS-ów z komputera przez Windows Phone Link.
 1. **ExcelImporter** — wczytuje `.xlsx`/`.csv`, waliduje numery (format PL przez bibliotekę `phonenumbers`), zwraca listę prawidłowych numerów + listę odrzuconych z powodem
 2. **BatchManager** — dzieli listę na paczki po max 20, śledzi status każdej paczki (oczekująca / wysłana / błąd), umożliwia wznowienie od ostatniej niewysłanej paczki
 3. **SMSSender (interfejs)** — abstrakcja z metodą `send(numbers, message)`. Implementacja: `PhoneLinkSender`. Architektura pozwala na dodanie `AdbSender` w przyszłości bez zmiany reszty kodu
-4. **PhoneLinkSender** — automatyzacja Phone Link przez PyAutoGUI (image recognition)
+4. **PhoneLinkSender** — automatyzacja Phone Link przez pywinauto UIA (UI Automation — znajduje kontrolki po nazwie i typie, odporne na skalowanie/motywy/rozdzielczości)
 5. **GUI (app.py)** — tkinter, jeden ekran z importem, edycją treści, podglądem paczek, progress barem i logiem
 
 ## Workflow użytkownika
@@ -48,13 +48,13 @@ Aplikacja desktopowa do wysyłania SMS-ów z komputera przez Windows Phone Link.
    b. Dodaje numery (max 20) — wpisuje każdy w pole "Do:" + Enter
    c. Wkleja treść (Ctrl+V dla polskich znaków)
    d. Klika Wyślij
-   e. Pauza 3-5 sekund → następna paczka
+   e. Losowa pauza 4-8 sekund → następna paczka
 7. Progress bar + log na żywo
 8. Podsumowanie: wysłane / pominięte / błędy
 
 ## Phone Link Automation — sekwencja
 
-Metoda: **Image Recognition** (`PyAutoGUI.locateOnScreen`) — szuka elementów wizualnie na screenshotach referencyjnych zamiast hardkodowanych koordynatów.
+Metoda: **pywinauto UIA (UI Automation)** — znajduje kontrolki po ich nazwach strukturalnych i typach (np. `child_window(title="New message", control_type="Button")`). Odporne na skalowanie ekranu, motywy jasny/ciemny, rozdzielczości i drobne zmiany UI w aktualizacjach.
 
 ```
 1. Fokus na okno Phone Link (pywinauto — znajdź po tytule okna)
@@ -62,24 +62,23 @@ Metoda: **Image Recognition** (`PyAutoGUI.locateOnScreen`) — szuka elementów 
 3. Kliknij "Nowa wiadomość" (ikona +)
 4. Dla każdego numeru w paczce (max 20):
    a. Kliknij pole "Do:"
-   b. Wpisz numer (pyautogui.typewrite)
+   b. Wpisz numer
    c. Potwierdź Enter (dodaje odbiorcę)
-   d. Czekaj 0.5s
+   d. wait('visible', timeout=10) — dynamiczny wait na pojawienie się tagu odbiorcy
 5. Kliknij pole treści wiadomości
-6. Wklej treść (Ctrl+V)
+6. Zachowaj aktualną zawartość schowka → wklej treść (Ctrl+V) → przywróć schowek
 7. Kliknij Wyślij
-8. Czekaj 3-5s → następna paczka
+8. Losowa pauza 4-8s → następna paczka
 ```
-
-### Kalibracja
-
-Dostarczamy gotowe screenshoty referencyjne z domyślnej instalacji Phone Link. Jeśli nie pasują — tryb kalibracji, w którym użytkownik wskazuje elementy ręcznie.
 
 ### Zabezpieczenia
 
-- Przed każdą akcją sprawdzamy czy Phone Link jest na wierzchu
-- Timeout 10s na znalezienie każdego elementu — jeśli nie znajdzie → stop
-- Użytkownik nie powinien ruszać myszką podczas wysyłki
+- Przed każdą akcją `wait('visible', timeout=10)` — dynamiczne czekanie na element zamiast stałych sleep()
+- Jeśli element nie pojawi się w 10s → stop + komunikat
+- Ochrona schowka: zapisanie → użycie → przywrócenie zawartości
+- Randomizacja opóźnień między paczkami (4-8s) — minimalizuje ryzyko wykrycia przez filtry anty-spam operatora
+- Ostrzeżenie w GUI: "Nie ruszaj myszką ani klawiaturą podczas wysyłki. Komputer będzie zablokowany na czas automatyzacji."
+- Ostrzeżenie przy dużych wysyłkach: "Wysyłanie dużej liczby SMS-ów z prywatnego numeru może triggerować filtry anty-spam operatora"
 
 ## Obsługa błędów
 
@@ -87,7 +86,7 @@ Dostarczamy gotowe screenshoty referencyjne z domyślnej instalacji Phone Link. 
 |------|---------|
 | Phone Link nie otwarty / nie znaleziono okna | Próba uruchomienia automatycznie. Jeśli się nie uda → stop + komunikat "Otwórz Phone Link i połącz telefon, potem kliknij Wznów" |
 | Telefon niepołączony | Czeka 15s, retry raz. Jeśli dalej nie działa → stop + komunikat |
-| Element UI nie znaleziony (image recognition fail) | Stop + komunikat "Nie mogę znaleźć elementu X. Sprawdź czy okno jest widoczne" |
+| Element UI nie znaleziony (UIA nie znajduje kontrolki) | Stop + komunikat "Nie mogę znaleźć elementu X. Sprawdź czy Phone Link jest otwarty i widoczny" |
 | Nieprawidłowy numer telefonu | Wykrywany przy imporcie. Trafia na listę "Pominięte" z powodem |
 | Wysyłka paczki nie powiodła się | Zapisuje stan (które paczki wysłane). Przycisk "Wznów" kontynuuje od ostatniej niewysłanej |
 | Błąd odczytu Excela | Komunikat przy imporcie: "Wiersz X: problem, pomijam" |
@@ -142,10 +141,8 @@ sms-sender/
 │   ├── batch_manager.py     # Dzielenie na paczki ≤20, śledzenie statusu
 │   └── sender.py            # SMSSender interfejs + PhoneLinkSender
 ├── automation/
-│   └── phone_link.py        # PyAutoGUI logika — sekwencja kliknięć
-├── assets/
-│   └── screenshots/         # Referencyjne screenshoty elementów Phone Link
-├── requirements.txt         # openpyxl, pyautogui, pywinauto, phonenumbers
+│   └── phone_link.py        # pywinauto UIA logika — sekwencja akcji
+├── requirements.txt         # openpyxl, pywinauto, phonenumbers
 └── README.md
 ```
 
@@ -154,8 +151,7 @@ sms-sender/
 - Python 3.12+
 - tkinter (GUI — wbudowane w Python)
 - openpyxl (odczyt Excel .xlsx)
-- PyAutoGUI (automatyzacja — kliknięcia, wpisywanie, image recognition)
-- pywinauto (zarządzanie oknami Windows — fokus, znajdowanie po tytule)
+- pywinauto z backendem UIA (automatyzacja — znajdowanie kontrolek po nazwie/typie, kliknięcia, wpisywanie, zarządzanie oknami)
 - phonenumbers (walidacja numerów PL)
 
 ## Przyszła rozbudowa
@@ -166,6 +162,8 @@ Architektura z interfejsem `SMSSender` pozwala na dodanie `AdbSender` (Podejści
 
 - Wymaga otwartego Phone Link z połączonym telefonem Android
 - Użytkownik nie może ruszać myszką podczas wysyłki
-- Zależność od UI Phone Link — zmiana layoutu może wymagać nowych screenshotów referencyjnych
+- Zależność od UI Phone Link — zmiana nazw kontrolek UIA w aktualizacji może wymagać dostosowania selektorów
+- Komputer zablokowany podczas wysyłki (UI automation wymaga fokusa na Phone Link)
+- Ryzyko filtrów anty-spam operatora przy dużej liczbie SMS-ów z prywatnego numeru
 - Max 20 odbiorców na paczkę (limit Phone Link)
 - Polskie numery — walidacja domyślnie dla PL. Akceptuje formaty: `+48512345678`, `48512345678`, `512345678`. Wszystkie normalizowane do formatu `+48XXXXXXXXX` przed wysyłką
