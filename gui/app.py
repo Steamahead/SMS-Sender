@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt
 from gui.styles import QSS
 from gui.widgets.import_panel import ImportPanel
 from gui.widgets.message_panel import MessagePanel
+from gui.widgets.preview_table import PreviewTable
 
 
 class SMSSenderApp:
@@ -64,6 +65,9 @@ class MainWindow(QMainWindow):
         self._message_panel.message_changed.connect(self._on_message_changed)
         layout.addWidget(self._message_panel)
 
+        self._preview_table = PreviewTable()
+        layout.addWidget(self._preview_table)
+
         layout.addStretch()
 
         self._tabs.addTab(tab, "Wysylka")
@@ -77,6 +81,10 @@ class MainWindow(QMainWindow):
         self._skipped = skipped
         self._row_data = row_data
         self._message_panel.set_recipient_count(len(numbers))
+        self._preview_table.update_data(
+            numbers, row_data, self._headers,
+            self._message_panel.get_message(),
+        )
         self._status.showMessage(f"{len(numbers)} numerow zaladowanych")
 
     def _on_headers_changed(self, headers):
@@ -84,4 +92,4 @@ class MainWindow(QMainWindow):
         self._message_panel.set_headers(headers)
 
     def _on_message_changed(self, text):
-        pass  # Will be used by preview table
+        self._preview_table.update_template(text)
