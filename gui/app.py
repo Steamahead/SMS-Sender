@@ -1,16 +1,22 @@
 import sys
+import os
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout,
     QStatusBar,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 
 from gui.styles import QSS
 from gui.widgets.import_panel import ImportPanel
 from gui.widgets.message_panel import MessagePanel
 from gui.widgets.preview_table import PreviewTable
 from gui.widgets.send_panel import SendPanel
+from gui.widgets.history_view import HistoryView
+from core.history import HistoryManager
+from core.settings import Settings
+from core.template_manager import TemplateManager
 
 
 class SMSSenderApp:
@@ -38,6 +44,12 @@ class MainWindow(QMainWindow):
         self._row_data = []
         self._headers = []
 
+        appdata = os.environ.get("APPDATA", os.path.expanduser("~"))
+        self._data_dir = os.path.join(appdata, "SMSSender")
+        self._history_manager = HistoryManager(os.path.join(self._data_dir, "history.db"))
+        self._settings = Settings(os.path.join(self._data_dir, "settings.json"))
+        self._template_manager = TemplateManager(os.path.join(self._data_dir, "templates.json"))
+
         # Tabs
         self._tabs = QTabWidget()
         self.setCentralWidget(self._tabs)
@@ -50,6 +62,19 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self._status)
         self._status.showMessage("Gotowy")
 
+        # Restore window geometry
+        if self._settings.window_x >= 0:
+            self.setGeometry(
+                self._settings.window_x, self._settings.window_y,
+                self._settings.window_width, self._settings.window_height,
+            )
+        else:
+            self.resize(self._settings.window_width, self._settings.window_height)
+
+        # Global Ctrl+V shortcut
+        paste_shortcut = QShortcut(QKeySequence.StandardKey.Paste, self)
+        paste_shortcut.activated.connect(self._on_global_paste)
+
     def _build_send_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -57,12 +82,12 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
 
         # Import panel
-        self._import_panel = ImportPanel()
+        self._import_panel = ImportPanel(settings=self._settings)
         self._import_panel.numbers_changed.connect(self._on_numbers_changed)
         self._import_panel.headers_changed.connect(self._on_headers_changed)
         layout.addWidget(self._import_panel)
 
-        self._message_panel = MessagePanel()
+        self._message_panel = MessagePanel(template_manager=self._template_manager)
         self._message_panel.message_changed.connect(self._on_message_changed)
         layout.addWidget(self._message_panel)
 
@@ -76,8 +101,13 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(tab, "Wysylka")
 
     def _build_history_tab(self):
-        tab = QWidget()
-        self._tabs.addTab(tab, "Historia")
+        self._history_view = HistoryView(self._history_manager)
+        self._tabs.addTab(self._history_view, "Historia")
+        self._tabs.currentChanged.connect(self._on_tab_changed)
+
+    def _on_tab_changed(self, index):
+        if index == 1:
+            self._history_view.refresh()
 
     def _on_numbers_changed(self, numbers, skipped, row_data):
         self._numbers = numbers
@@ -103,6 +133,12 @@ class MainWindow(QMainWindow):
         self._message_panel.set_headers(headers)
 
     def _on_sending_finished(self, results):
+        source = self._import_panel._lbl_file.text()
+        self._history_manager.save_session(
+            message=self._message_panel.get_message(),
+            source_file=source,
+            recipients=results,
+        )
         self._status.showMessage("Wysylka zakonczona")
 
     def _on_message_changed(self, text):
@@ -114,4 +150,40 @@ class MainWindow(QMainWindow):
         self._send_panel.set_data(
             self._numbers, text.strip(),
             self._preview_table.get_selected_numbers,
+        )
+
+    def closeEvent(self, event):
+        geo = self.geometry()
+        self._settings.window_width = geo.width()
+        self._settings.window_height = geo.height()
+        self._settings.window_x = geo.x()
+        self._settings.window_y = geo.y()
+        super().closeEvent(event)
+
+    def _on_global_paste(self):
+        from PySide6.QtWidgets import QApplication
+        from core.clipboard_import import parse_clipboard_text
+        from core.excel_importer import deduplicate_numbers
+
+        # Only paste numbers if on the send tab and message editor doesn't have focus
+        if self._tabs.currentIndex() != 0:
+            return
+        if self._message_panel._editor.hasFocus():
+            return
+
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if not text or not text.strip():
+            return
+
+        valid, skipped = parse_clipboard_text(text)
+        if not valid:
+            return
+
+        combined = self._numbers + valid
+        combined, dup_count = deduplicate_numbers(combined)
+
+        self._on_numbers_changed(combined, skipped, self._row_data)
+        self._status.showMessage(
+            f"Wklejono {len(valid)} numerow ({dup_count} duplikatow usunietych)"
         )
