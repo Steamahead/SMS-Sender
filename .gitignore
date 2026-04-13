@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Test artifacts
+tmp*/
+test_data.xlsx
+
+# IDE
+.idea/
+.vscode/
+
+# Virtual env
+venv/
+.venv/
+
+# Build
+build/
+dist/
+*.spec
