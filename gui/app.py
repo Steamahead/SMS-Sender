@@ -10,6 +10,7 @@ from gui.styles import QSS
 from gui.widgets.import_panel import ImportPanel
 from gui.widgets.message_panel import MessagePanel
 from gui.widgets.preview_table import PreviewTable
+from gui.widgets.send_panel import SendPanel
 
 
 class SMSSenderApp:
@@ -68,7 +69,9 @@ class MainWindow(QMainWindow):
         self._preview_table = PreviewTable()
         layout.addWidget(self._preview_table)
 
-        layout.addStretch()
+        self._send_panel = SendPanel()
+        self._send_panel.sending_finished.connect(self._on_sending_finished)
+        layout.addWidget(self._send_panel)
 
         self._tabs.addTab(tab, "Wysylka")
 
@@ -85,11 +88,30 @@ class MainWindow(QMainWindow):
             numbers, row_data, self._headers,
             self._message_panel.get_message(),
         )
+        self._send_panel.set_ready(
+            has_numbers=bool(numbers),
+            has_message=bool(self._message_panel.get_message()),
+        )
+        self._send_panel.set_data(
+            numbers, self._message_panel.get_message(),
+            self._preview_table.get_selected_numbers,
+        )
         self._status.showMessage(f"{len(numbers)} numerow zaladowanych")
 
     def _on_headers_changed(self, headers):
         self._headers = headers
         self._message_panel.set_headers(headers)
 
+    def _on_sending_finished(self, results):
+        self._status.showMessage("Wysylka zakonczona")
+
     def _on_message_changed(self, text):
         self._preview_table.update_template(text)
+        self._send_panel.set_ready(
+            has_numbers=bool(self._numbers),
+            has_message=bool(text.strip()),
+        )
+        self._send_panel.set_data(
+            self._numbers, text.strip(),
+            self._preview_table.get_selected_numbers,
+        )
