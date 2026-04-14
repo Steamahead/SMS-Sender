@@ -18,20 +18,27 @@ class HistoryView(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
 
-        # Sessions table
-        sessions_group = QGroupBox("Sesje wysylki")
+        sessions_group = QGroupBox("Sesje wysyłek")
         sessions_layout = QVBoxLayout(sessions_group)
+        sessions_layout.setContentsMargins(8, 8, 8, 8)
 
         self._sessions_table = QTableWidget()
         self._sessions_table.setColumnCount(5)
         self._sessions_table.setHorizontalHeaderLabels([
-            "Data", "Plik", "Tresc", "Wyslano", "Bledy"
+            "Data", "Źródło", "Treść", "Wysłano", "Błędy"
         ])
+        self._sessions_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._sessions_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
         self._sessions_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.Stretch
         )
@@ -42,29 +49,43 @@ class HistoryView(QWidget):
             QTableWidget.SelectionMode.SingleSelection
         )
         self._sessions_table.verticalHeader().setVisible(False)
+        self._sessions_table.setAlternatingRowColors(True)
+        self._sessions_table.setShowGrid(False)
         self._sessions_table.currentCellChanged.connect(self._on_session_selected)
         sessions_layout.addWidget(self._sessions_table)
 
         splitter.addWidget(sessions_group)
 
-        # Session details
-        details_group = QGroupBox("Szczegoly sesji")
+        details_group = QGroupBox("Szczegóły sesji")
         details_layout = QVBoxLayout(details_group)
+        details_layout.setContentsMargins(8, 8, 8, 8)
 
         self._details_table = QTableWidget()
         self._details_table.setColumnCount(3)
-        self._details_table.setHorizontalHeaderLabels(["Numer", "Status", "Blad"])
+        self._details_table.setHorizontalHeaderLabels(["Numer telefonu", "Status", "Szczegóły błędu"])
         self._details_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
         self._details_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._details_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.Stretch
         )
+        self._details_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self._details_table.setSelectionMode(
+            QTableWidget.SelectionMode.NoSelection
+        )
         self._details_table.verticalHeader().setVisible(False)
+        self._details_table.setAlternatingRowColors(True)
+        self._details_table.setShowGrid(False)
         details_layout.addWidget(self._details_table)
 
         splitter.addWidget(details_group)
 
+        splitter.setSizes([400, 300])
         layout.addWidget(splitter)
 
     def refresh(self):
@@ -83,16 +104,18 @@ class HistoryView(QWidget):
             file_item.setFlags(file_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._sessions_table.setItem(i, 1, file_item)
 
-            msg_item = QTableWidgetItem(s["message"][:60])
+            msg_item = QTableWidgetItem(s["message"][:80] + "..." if len(s["message"]) > 80 else s["message"])
             msg_item.setFlags(msg_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._sessions_table.setItem(i, 2, msg_item)
 
             sent_item = QTableWidgetItem(str(s["sent"]))
             sent_item.setFlags(sent_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            sent_item.setTextAlignment(Qt.AlignCenter)
             self._sessions_table.setItem(i, 3, sent_item)
 
             err_item = QTableWidgetItem(str(s["errors"]))
             err_item.setFlags(err_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            err_item.setTextAlignment(Qt.AlignCenter)
             self._sessions_table.setItem(i, 4, err_item)
 
     def _on_session_selected(self, row, col, prev_row, prev_col):

@@ -1,12 +1,13 @@
+import os
 import time
 import threading
 import random
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QProgressBar, QTextEdit, QGroupBox, QMessageBox, QFileDialog,
+    QProgressBar, QTextEdit, QMessageBox, QFileDialog, QSizePolicy,
 )
-from PySide6.QtCore import Signal, Slot
+from PySide6.QtCore import Signal, Qt
 
 from core.batch_manager import BatchManager
 from core.sender import PhoneLinkSender
@@ -17,7 +18,7 @@ from gui.styles import COLORS
 class SendPanel(QWidget):
     """Panel with send/stop/resume buttons, progress bar, and log."""
 
-    sending_finished = Signal(list)  # recipients results for history
+    sending_finished = Signal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -33,24 +34,34 @@ class SendPanel(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(6)
 
-        # Buttons row
+        main_row = QHBoxLayout()
+        main_row.setSpacing(10)
+
+        left_col = QVBoxLayout()
+        left_col.setSpacing(6)
+
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
 
-        self._btn_send = QPushButton("Wyslij")
+        self._btn_send = QPushButton("Rozpocznij wysyłkę")
         self._btn_send.setProperty("class", "primary")
+        self._btn_send.setMinimumWidth(160)
+        self._btn_send.setMinimumHeight(36)
         self._btn_send.setEnabled(False)
         self._btn_send.clicked.connect(self._on_send)
         btn_row.addWidget(self._btn_send)
 
-        self._btn_stop = QPushButton("Stop")
+        self._btn_stop = QPushButton("Zatrzymaj")
+        self._btn_stop.setMinimumHeight(36)
         self._btn_stop.setEnabled(False)
         self._btn_stop.clicked.connect(self._on_stop)
         btn_row.addWidget(self._btn_stop)
 
-        self._btn_resume = QPushButton("Wznow")
+        self._btn_resume = QPushButton("Wznów")
+        self._btn_resume.setMinimumHeight(36)
         self._btn_resume.setEnabled(False)
         self._btn_resume.clicked.connect(self._on_resume)
         btn_row.addWidget(self._btn_resume)
@@ -58,35 +69,45 @@ class SendPanel(QWidget):
         btn_row.addStretch()
 
         self._btn_export = QPushButton("Eksportuj raport")
+        self._btn_export.setMinimumHeight(36)
         self._btn_export.setEnabled(False)
         self._btn_export.clicked.connect(self._on_export)
         btn_row.addWidget(self._btn_export)
 
-        layout.addLayout(btn_row)
+        left_col.addLayout(btn_row)
 
-        # Progress bar
+        progress_row = QHBoxLayout()
+
         self._progress = QProgressBar()
         self._progress.setTextVisible(False)
+        self._progress.setMinimumHeight(8)
         self._progress.setMaximumHeight(8)
-        layout.addWidget(self._progress)
+        self._progress.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        progress_row.addWidget(self._progress)
 
-        self._lbl_progress = QLabel("")
+        self._lbl_progress = QLabel("0%")
+        self._lbl_progress.setMinimumWidth(60)
+        self._lbl_progress.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._lbl_progress.setProperty("class", "dim")
-        layout.addWidget(self._lbl_progress)
+        progress_row.addWidget(self._lbl_progress)
 
-        # Log
-        log_group = QGroupBox("Log")
-        log_layout = QVBoxLayout(log_group)
+        left_col.addLayout(progress_row)
+        main_row.addLayout(left_col, stretch=1)
+
         self._txt_log = QTextEdit()
         self._txt_log.setReadOnly(True)
-        self._txt_log.setMaximumHeight(150)
+        self._txt_log.setMinimumHeight(70)
+        self._txt_log.setMaximumHeight(90)
         self._txt_log.setStyleSheet(
-            f"background-color: {COLORS['bg']}; "
+            f"background-color: {COLORS['surface']}; "
             f"color: {COLORS['text_secondary']}; "
-            f"font-size: 11px; font-family: 'Consolas';"
+            f"border: 1px solid {COLORS['border']}; "
+            f"border-radius: 8px; "
+            f"font-size: 12px; font-family: 'Consolas', monospace;"
         )
-        log_layout.addWidget(self._txt_log)
-        layout.addWidget(log_group)
+        main_row.addWidget(self._txt_log, stretch=1)
+
+        layout.addLayout(main_row)
 
     def set_ready(self, has_numbers: bool, has_message: bool):
         can_send = has_numbers and has_message and not self._sending
@@ -100,16 +121,16 @@ class SendPanel(QWidget):
     def _on_send(self):
         selected = self._get_selected()
         if not selected:
-            QMessageBox.warning(self, "Brak odbiorcow", "Zaznacz odbiorcow do wysylki")
+            QMessageBox.warning(self, "Brak odbiorców", "Zaznacz przynajmniej jednego odbiorcę.")
             return
         if not self._message:
-            QMessageBox.warning(self, "Brak tresci", "Wpisz tresc wiadomosci")
+            QMessageBox.warning(self, "Brak treści", "Wpisz treść wiadomości.")
             return
 
         QMessageBox.warning(
             self, "Uwaga",
-            "Nie ruszaj myszka ani klawiatura podczas wysylki.\n"
-            "Komputer bedzie zablokowany na czas automatyzacji.",
+            "Nie ruszaj myszką ani klawiaturą podczas wysyłki.\n"
+            "Komputer będzie zablokowany na czas automatyzacji.",
         )
 
         self._batch_manager = BatchManager(selected, batch_size=20)
@@ -118,7 +139,7 @@ class SendPanel(QWidget):
 
     def _on_stop(self):
         self._stop_requested = True
-        self._log("Zatrzymywanie wysylki...")
+        self._log("Zatrzymywanie wysyłki...")
 
     def _on_resume(self):
         self._start_sending()
@@ -140,6 +161,7 @@ class SendPanel(QWidget):
 
         self._progress.setMaximum(total)
         self._progress.setValue(0)
+        self._lbl_progress.setText(f"0 / {total}")
 
         try:
             self._sender._automation.connect()
@@ -154,13 +176,12 @@ class SendPanel(QWidget):
                 break
 
             batch = bm.get_batch(idx)
-            self._log(f"Paczka {idx + 1}/{total} ({len(batch)} numerow)...")
-            self._lbl_progress.setText(f"Paczka {idx + 1}/{total}")
+            self._log(f"Paczka {idx + 1}/{total} ({len(batch)} numerów)...")
 
             try:
                 self._sender.send(batch, self._message)
                 bm.mark_sent(idx)
-                self._log(f"Paczka {idx + 1}/{total} wyslana")
+                self._log(f"Paczka {idx + 1}/{total} wysłana poprawnie")
 
                 for num in batch:
                     self._results.append({
@@ -187,16 +208,17 @@ class SendPanel(QWidget):
                 return
 
             self._progress.setValue(idx + 1)
+            self._lbl_progress.setText(f"{idx + 1} / {total}")
 
             if bm.next_pending_index() is not None:
                 delay = random.uniform(4.0, 8.0)
-                self._log(f"Czekam {delay:.1f}s przed nastepna paczka...")
+                self._log(f"Czekam {delay:.1f}s...")
                 time.sleep(delay)
 
         summary = bm.summary()
         self._log(
-            f"Zakonczono: {summary['sent']} wyslanych, "
-            f"{summary['error']} bledow, {summary['pending']} oczekujacych"
+            f"Koniec: {summary['sent']} wysłanych, "
+            f"{summary['error']} błędów, {summary['pending']} pominiętych"
         )
         self._finish_sending()
 
@@ -230,11 +252,11 @@ class SendPanel(QWidget):
         else:
             export_report_xlsx(path, self._results)
 
-        self._log(f"Raport wyeksportowany: {path}")
+        self._log(f"Zapisano raport: {os.path.basename(path)}")
 
     def _log(self, message: str):
         timestamp = time.strftime("%H:%M:%S")
-        line = f"{timestamp} {message}"
+        line = f"[{timestamp}] {message}"
         self._txt_log.append(line)
         scrollbar = self._txt_log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())

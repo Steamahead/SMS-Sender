@@ -16,7 +16,7 @@ class MessagePanel(QGroupBox):
     message_changed = Signal(str)
 
     def __init__(self, template_manager=None, parent=None):
-        super().__init__("Tresc SMS", parent)
+        super().__init__("Treść SMS", parent)
         self._template_manager = template_manager
         self._headers = []
         self._recipient_count = 0
@@ -24,57 +24,61 @@ class MessagePanel(QGroupBox):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
-        # Templates row
         row1 = QHBoxLayout()
+        row1.setSpacing(8)
 
         self._combo_templates = QComboBox()
-        self._combo_templates.setMinimumWidth(200)
-        self._combo_templates.addItem("-- Szablony --")
+        self._combo_templates.setMinimumWidth(220)
+        self._combo_templates.addItem("— Wybierz szablon —")
         self._combo_templates.currentIndexChanged.connect(self._on_template_selected)
         row1.addWidget(self._combo_templates)
 
-        btn_save_tpl = QPushButton("Zapisz szablon")
+        btn_save_tpl = QPushButton("Zapisz")
         btn_save_tpl.clicked.connect(self._on_save_template)
         row1.addWidget(btn_save_tpl)
 
-        btn_del_tpl = QPushButton("Usun szablon")
+        btn_del_tpl = QPushButton("Usuń")
         btn_del_tpl.clicked.connect(self._on_delete_template)
         row1.addWidget(btn_del_tpl)
 
         row1.addStretch()
         layout.addLayout(row1)
 
-        # Variables hint
         self._lbl_variables = QLabel("")
         self._lbl_variables.setProperty("class", "dim")
         self._lbl_variables.setWordWrap(True)
         layout.addWidget(self._lbl_variables)
 
-        # Text editor
         self._editor = QTextEdit()
-        self._editor.setMaximumHeight(100)
-        self._editor.setPlaceholderText("Wpisz tresc wiadomosci...")
+        self._editor.setMinimumHeight(60)
+        self._editor.setMaximumHeight(90)
+        self._editor.setPlaceholderText("Wpisz treść wiadomości tutaj...")
         self._editor.textChanged.connect(self._on_text_changed)
         layout.addWidget(self._editor)
 
-        # Char counter
+        bottom_row = QHBoxLayout()
+
         self._lbl_chars = QLabel("Znaki: 0/320 (1 SMS)")
         self._lbl_chars.setProperty("class", "dim")
-        layout.addWidget(self._lbl_chars)
+        bottom_row.addWidget(self._lbl_chars)
 
-        # SMS count info
+        bottom_row.addStretch()
+
         self._lbl_sms_count = QLabel("")
         self._lbl_sms_count.setProperty("class", "dim")
-        layout.addWidget(self._lbl_sms_count)
+        bottom_row.addWidget(self._lbl_sms_count)
+
+        layout.addLayout(bottom_row)
 
         self._refresh_templates()
 
     def set_headers(self, headers: list[str]):
         self._headers = headers
         if headers:
-            vars_text = "Dostepne zmienne: " + ", ".join(
+            vars_text = "Dostępne zmienne: " + ", ".join(
                 f"{{{h}}}" for h in headers if h
             )
             self._lbl_variables.setText(vars_text)
@@ -107,8 +111,10 @@ class MessagePanel(QGroupBox):
             sms_parts = 1 if count <= 160 else 2
             total = recipients * sms_parts
             self._lbl_sms_count.setText(
-                f"Odbiorcy: {recipients} x {sms_parts} SMS = {total} SMS-ow"
+                f"Odbiorcy: {recipients}  |  Łącznie: {total} SMS"
             )
+        elif recipients > 0:
+            self._lbl_sms_count.setText(f"Odbiorcy: {recipients}")
         else:
             self._lbl_sms_count.setText("")
 
@@ -125,13 +131,14 @@ class MessagePanel(QGroupBox):
             return
         text = self._editor.toPlainText().strip()
         if not text:
-            QMessageBox.warning(self, "Pusta tresc", "Wpisz tresc szablonu")
+            QMessageBox.warning(self, "Pusta treść", "Wpisz treść szablonu przed zapisem.")
             return
 
         name, ok = QInputDialog.getText(self, "Zapisz szablon", "Nazwa szablonu:")
         if ok and name.strip():
             self._template_manager.save(name.strip(), text)
             self._refresh_templates()
+            self._combo_templates.setCurrentText(name.strip())
 
     def _on_delete_template(self):
         if not self._template_manager:
@@ -146,7 +153,7 @@ class MessagePanel(QGroupBox):
     def _refresh_templates(self):
         self._combo_templates.blockSignals(True)
         self._combo_templates.clear()
-        self._combo_templates.addItem("-- Szablony --")
+        self._combo_templates.addItem("— Wybierz szablon —")
         if self._template_manager:
             for name in self._template_manager.list_names():
                 self._combo_templates.addItem(name)
