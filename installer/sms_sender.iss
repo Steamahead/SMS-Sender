@@ -3,7 +3,7 @@
 
 #define MyAppName "SMS Sender"
 #define MyAppVersion "2.0.0"
-#define MyAppPublisher "SMS Sender"
+#define MyAppPublisher "Damian Sadza"
 #define MyAppExeName "SMSSender.exe"
 
 [Setup]
