@@ -4,6 +4,21 @@ Aplikacja desktopowa do masowej wysyłki SMS z komputera z systemem Windows, prz
 
 Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i małych firmach, które chcą wysłać kilkadziesiąt lub kilkaset spersonalizowanych SMS‑ów bez kupowania bramki SMS.
 
+> **Projekt Fundacji Full Steam Ahead** — bezpłatne narzędzie dla każdego.
+> Kontakt: kontakt@fullsteam.pl | Repozytorium: https://github.com/Steamahead/SMS-Sender
+
+---
+
+## Pobierz i zainstaluj
+
+**[⬇ Pobierz instalator (SMSSender_Setup_2.0.0.exe)](https://github.com/Steamahead/SMS-Sender/releases/latest)**
+
+1. Kliknij link powyżej
+2. Uruchom pobrany plik `SMSSender_Setup_2.0.0.exe`
+3. Podążaj za kreatorem — domyślne ustawienia są OK
+
+> **Uwaga:** Windows SmartScreen może ostrzec o „nieznanym wydawcy" — kliknij *Więcej informacji* → *Uruchom mimo to*. Aplikacja nie jest podpisana certyfikatem komercyjnym, ale jest w pełni bezpieczna — kod źródłowy jest publiczny w tym repozytorium.
+
 ---
 
 ## Co potrafi
@@ -35,8 +50,8 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 
 ## Instalacja
 
-1. Pobierz plik `SMSSender_Setup_2.0.0.exe`
-2. Uruchom instalator — podąrzaj za kreatorem (domyślne ustawienia są OK)
+1. Pobierz instalator ze strony [Releases](https://github.com/Steamahead/SMS-Sender/releases/latest)
+2. Uruchom plik `SMSSender_Setup_2.0.0.exe` — podążaj za kreatorem (domyślne ustawienia są OK)
 3. Opcjonalnie zaznacz **„Utwórz ikonę na pulpicie"**
 4. Po instalacji aplikacja startuje automatycznie
 
@@ -126,8 +141,8 @@ PyInstaller generuje binaria podobne do niektórych malware — to fałszywy ala
 ### Uruchomienie z kodu źródłowego
 
 ```bash
-git clone <repo>
-cd sms-sender
+git clone https://github.com/Steamahead/SMS-Sender.git
+cd SMS-Sender
 pip install -r requirements.txt
 python main.py
 ```
