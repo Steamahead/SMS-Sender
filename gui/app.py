@@ -14,6 +14,7 @@ from gui.widgets.message_panel import MessagePanel
 from gui.widgets.preview_table import PreviewTable
 from gui.widgets.send_panel import SendPanel
 from gui.widgets.history_view import HistoryView
+from gui.widgets.about_dialog import AboutTab
 from core.history import HistoryManager
 from core.settings import Settings
 from core.template_manager import TemplateManager
@@ -62,6 +63,7 @@ class MainWindow(QMainWindow):
 
         self._build_send_tab()
         self._build_history_tab()
+        self._build_about_tab()
 
         self._status = QStatusBar()
         self.setStatusBar(self._status)
@@ -106,6 +108,9 @@ class MainWindow(QMainWindow):
         self._history_view = HistoryView(self._history_manager)
         self._tabs.addTab(self._history_view, "Historia")
         self._tabs.currentChanged.connect(self._on_tab_changed)
+
+    def _build_about_tab(self):
+        self._tabs.addTab(AboutTab(), "O aplikacji")
 
     def _on_tab_changed(self, index):
         if index == 1:
