@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QHeaderView, QAbstractItemView, QCheckBox, QWidget, QHBoxLayout,
     QPushButton, QSizePolicy, QLabel, QLineEdit,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 from core.personalizer import Personalizer
 from core.excel_importer import validate_phone_number, deduplicate_numbers
@@ -13,7 +13,7 @@ from gui.styles import COLORS
 class PreviewTable(QGroupBox):
     """Table showing recipients with personalized message preview."""
 
-    numbers_added = None  # Signal set by parent if needed
+    numbers_added = Signal(list)
 
     def __init__(self, parent=None):
         super().__init__("Podgląd odbiorców", parent)
@@ -136,6 +136,7 @@ class PreviewTable(QGroupBox):
         self._numbers.append(normalized)
         self._check_states[normalized] = True
         self._refresh()
+        self.numbers_added.emit(list(self._numbers))
 
     def _refresh(self):
         count = len(self._numbers)

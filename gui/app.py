@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._message_panel, stretch=0)
 
         self._preview_table = PreviewTable()
+        self._preview_table.numbers_added.connect(self._on_manual_numbers_added)
         layout.addWidget(self._preview_table, stretch=1)
 
         self._send_panel = SendPanel()
@@ -140,6 +141,26 @@ class MainWindow(QMainWindow):
             word = "numery załadowane"
         else:
             word = "numerów załadowanych"
+        self._status.showMessage(f"{n} {word}")
+
+    def _on_manual_numbers_added(self, numbers):
+        self._numbers = list(numbers)
+        self._message_panel.set_recipient_count(len(numbers))
+        self._send_panel.set_ready(
+            has_numbers=bool(numbers),
+            has_message=bool(self._message_panel.get_message()),
+        )
+        self._send_panel.set_data(
+            numbers, self._message_panel.get_message(),
+            self._preview_table.get_selected_numbers,
+        )
+        n = len(numbers)
+        if n == 1:
+            word = "numer na liście"
+        elif 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
+            word = "numery na liście"
+        else:
+            word = "numerów na liście"
         self._status.showMessage(f"{n} {word}")
 
     def _on_headers_changed(self, headers):
