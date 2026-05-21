@@ -13,7 +13,8 @@ from gui.styles import COLORS
 class PreviewTable(QGroupBox):
     """Table showing recipients with personalized message preview."""
 
-    numbers_added = Signal(list)
+    numbers_changed_locally = Signal(list)
+    clear_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__("Podgląd odbiorców", parent)
@@ -56,6 +57,11 @@ class PreviewTable(QGroupBox):
         btn_deselect_all.clicked.connect(self._deselect_all)
         btn_row.addWidget(btn_deselect_all)
 
+        self._btn_clear = QPushButton("Wyczyść listę")
+        self._btn_clear.setToolTip("Usuń wszystkie numery i resetuj plik importu")
+        self._btn_clear.clicked.connect(self.clear_requested.emit)
+        btn_row.addWidget(self._btn_clear)
+
         btn_row.addStretch()
 
         self._lbl_count = QLabel("")
@@ -65,12 +71,14 @@ class PreviewTable(QGroupBox):
         layout.addLayout(btn_row)
 
         self._table = QTableWidget()
-        self._table.setColumnCount(3)
-        self._table.setHorizontalHeaderLabels(["", "Numer", "Gotowa treść"])
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(["", "Numer", "Gotowa treść", ""])
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         self._table.setColumnWidth(0, 40)
+        self._table.setColumnWidth(3, 36)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
@@ -91,10 +99,29 @@ class PreviewTable(QGroupBox):
         self._refresh()
 
     def update_template(self, template: str):
-        """Update only the message template — preserves checkbox states."""
+        """Update only the message template — preserves checkbox states.
+        Re-renders only the 'Gotowa treść' column without rebuilding row widgets."""
         self._template = template
-        self._save_check_states()
-        self._refresh()
+        self._render_message_column()
+
+    def _render_message_column(self):
+        personalizer = None
+        if self._template and self._row_data:
+            personalizer = Personalizer(self._template, self._headers)
+
+        for i, num in enumerate(self._numbers):
+            if personalizer and i < len(self._row_data):
+                msg = personalizer.render(self._row_data[i])
+            else:
+                msg = self._template
+
+            item = self._table.item(i, 2)
+            if item is None:
+                item = QTableWidgetItem(msg)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                self._table.setItem(i, 2, item)
+            else:
+                item.setText(msg)
 
     def get_selected_numbers(self) -> list[str]:
         selected = []
@@ -136,11 +163,23 @@ class PreviewTable(QGroupBox):
         self._numbers.append(normalized)
         self._check_states[normalized] = True
         self._refresh()
-        self.numbers_added.emit(list(self._numbers))
+        self.numbers_changed_locally.emit(list(self._numbers))
+
+    def _on_remove_number(self, index: int):
+        if index < 0 or index >= len(self._numbers):
+            return
+        self._save_check_states()
+        num = self._numbers.pop(index)
+        if index < len(self._row_data):
+            self._row_data.pop(index)
+        self._check_states.pop(num, None)
+        self._refresh()
+        self.numbers_changed_locally.emit(list(self._numbers))
 
     def _refresh(self):
         count = len(self._numbers)
         self._lbl_count.setText(f"Liczba numerów: {count}" if count > 0 else "")
+        self._table.setUpdatesEnabled(False)
         self._table.setRowCount(count)
         self._checks = []
 
@@ -173,3 +212,22 @@ class PreviewTable(QGroupBox):
             msg_item = QTableWidgetItem(msg)
             msg_item.setFlags(msg_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(i, 2, msg_item)
+
+            btn_remove = QPushButton("✕")
+            btn_remove.setFlat(True)
+            btn_remove.setFixedSize(26, 22)
+            btn_remove.setToolTip("Usuń numer z listy")
+            btn_remove.setStyleSheet(
+                f"QPushButton {{ color: {COLORS['text_dim']}; border: none; "
+                f"font-weight: bold; font-size: 14px; background: transparent; }} "
+                f"QPushButton:hover {{ color: {COLORS['error']}; }}"
+            )
+            btn_remove.clicked.connect(lambda _, idx=i: self._on_remove_number(idx))
+            btn_widget = QWidget()
+            btn_layout = QHBoxLayout(btn_widget)
+            btn_layout.addWidget(btn_remove)
+            btn_layout.setAlignment(Qt.AlignCenter)
+            btn_layout.setContentsMargins(0, 0, 0, 0)
+            self._table.setCellWidget(i, 3, btn_widget)
+
+        self._table.setUpdatesEnabled(True)

@@ -19,6 +19,11 @@ class SendPanel(QWidget):
     """Panel with send/stop/resume buttons, progress bar, and log."""
 
     sending_finished = Signal(list)
+    _log_signal = Signal(str)
+    _progress_init_signal = Signal(int)
+    _progress_update_signal = Signal(int, int)
+    _send_finished_signal = Signal()
+    _connect_failed_signal = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -31,6 +36,11 @@ class SendPanel(QWidget):
         self._message = ""
         self._get_selected = lambda: []
         self._build_ui()
+        self._log_signal.connect(self._slot_log)
+        self._progress_init_signal.connect(self._slot_progress_init)
+        self._progress_update_signal.connect(self._slot_progress_update)
+        self._send_finished_signal.connect(self._finish_sending)
+        self._connect_failed_signal.connect(self._slot_connect_failed)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -159,15 +169,12 @@ class SendPanel(QWidget):
         bm = self._batch_manager
         total = bm.total_batches
 
-        self._progress.setMaximum(total)
-        self._progress.setValue(0)
-        self._lbl_progress.setText(f"0 / {total}")
+        self._progress_init_signal.emit(total)
 
         try:
             self._sender._automation.connect()
         except Exception as e:
-            self._log(f"BLAD: {e}")
-            self._finish_sending()
+            self._connect_failed_signal.emit(str(e))
             return
 
         while True:
@@ -204,13 +211,12 @@ class SendPanel(QWidget):
                         "error": str(e),
                     })
 
-                self._finish_sending()
+                self._send_finished_signal.emit()
                 return
 
-            self._progress.setValue(idx + 1)
-            self._lbl_progress.setText(f"{idx + 1} / {total}")
+            self._progress_update_signal.emit(idx + 1, total)
 
-            if bm.next_pending_index() is not None:
+            if bm.next_pending_index() is not None and not self._stop_requested:
                 delay = random.uniform(4.0, 8.0)
                 self._log(f"Czekam {delay:.1f}s...")
                 time.sleep(delay)
@@ -220,7 +226,7 @@ class SendPanel(QWidget):
             f"Koniec: {summary['sent']} wysłanych, "
             f"{summary['error']} błędów, {summary['pending']} pominiętych"
         )
-        self._finish_sending()
+        self._send_finished_signal.emit()
 
     def _finish_sending(self):
         self._sending = False
@@ -255,8 +261,24 @@ class SendPanel(QWidget):
         self._log(f"Zapisano raport: {os.path.basename(path)}")
 
     def _log(self, message: str):
+        self._log_signal.emit(message)
+
+    def _slot_log(self, message: str):
         timestamp = time.strftime("%H:%M:%S")
         line = f"[{timestamp}] {message}"
         self._txt_log.append(line)
         scrollbar = self._txt_log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+
+    def _slot_progress_init(self, total: int):
+        self._progress.setMaximum(total)
+        self._progress.setValue(0)
+        self._lbl_progress.setText(f"0 / {total}")
+
+    def _slot_progress_update(self, current: int, total: int):
+        self._progress.setValue(current)
+        self._lbl_progress.setText(f"{current} / {total}")
+
+    def _slot_connect_failed(self, error: str):
+        self._slot_log(f"BLAD: {error}")
+        self._finish_sending()

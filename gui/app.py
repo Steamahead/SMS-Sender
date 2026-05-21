@@ -96,7 +96,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._message_panel, stretch=0)
 
         self._preview_table = PreviewTable()
-        self._preview_table.numbers_added.connect(self._on_manual_numbers_added)
+        self._preview_table.numbers_changed_locally.connect(self._on_manual_numbers_changed)
+        self._preview_table.clear_requested.connect(self._on_clear_requested)
         layout.addWidget(self._preview_table, stretch=1)
 
         self._send_panel = SendPanel()
@@ -143,7 +144,7 @@ class MainWindow(QMainWindow):
             word = "numerów załadowanych"
         self._status.showMessage(f"{n} {word}")
 
-    def _on_manual_numbers_added(self, numbers):
+    def _on_manual_numbers_changed(self, numbers):
         self._numbers = list(numbers)
         self._message_panel.set_recipient_count(len(numbers))
         self._send_panel.set_ready(
@@ -168,13 +169,35 @@ class MainWindow(QMainWindow):
         self._message_panel.set_headers(headers)
 
     def _on_sending_finished(self, results):
+        if not results:
+            return
         source = self._import_panel._lbl_file.text()
         self._history_manager.save_session(
             message=self._message_panel.get_message(),
             source_file=source,
             recipients=results,
         )
-        self._status.showMessage("Wysyłka zakończona")
+        self._reset_recipients_and_message()
+        self._status.showMessage("Wysyłka zakończona — lista wyczyszczona, gotowy do nowej wysyłki")
+
+    def _on_clear_requested(self):
+        self._reset_recipients_and_message()
+        self._status.showMessage("Lista wyczyszczona")
+
+    def _reset_recipients_and_message(self):
+        self._numbers = []
+        self._skipped = []
+        self._row_data = []
+        self._headers = []
+        self._import_panel.reset()
+        self._message_panel.clear_message()
+        self._message_panel.set_headers([])
+        self._message_panel.set_recipient_count(0)
+        self._preview_table.update_data([], [], None, "")
+        self._send_panel.set_ready(has_numbers=False, has_message=False)
+        self._send_panel.set_data(
+            [], "", self._preview_table.get_selected_numbers,
+        )
 
     def _on_message_changed(self, text):
         self._preview_table.update_template(text)

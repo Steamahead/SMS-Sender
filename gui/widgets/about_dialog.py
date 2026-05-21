@@ -10,7 +10,7 @@ from PySide6.QtGui import QPixmap
 from gui.styles import COLORS
 
 
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.2"
 
 ABOUT_HTML = f"""
 <div style="color: {COLORS['text']}; font-family: 'Segoe UI'; font-size: 13px; line-height: 1.55;">

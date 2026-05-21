@@ -220,3 +220,13 @@ class ImportPanel(QGroupBox):
     def set_enabled(self, enabled: bool):
         self._btn_import.setEnabled(enabled)
         self._combo_column.setEnabled(enabled and bool(self._current_path))
+
+    def reset(self):
+        self._current_path = ""
+        self._headers = None
+        self._lbl_file.setText("Nie wybrano pliku")
+        self._lbl_summary.setText("")
+        self._combo_column.blockSignals(True)
+        self._combo_column.clear()
+        self._combo_column.setEnabled(False)
+        self._combo_column.blockSignals(False)

@@ -2,7 +2,8 @@ import os
 
 from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QComboBox, QInputDialog, QMessageBox,
+    QTextEdit, QComboBox, QInputDialog, QMessageBox, QDialog,
+    QDialogButtonBox,
 )
 from PySide6.QtCore import Signal
 
@@ -32,13 +33,20 @@ class MessagePanel(QGroupBox):
 
         self._combo_templates = QComboBox()
         self._combo_templates.setMinimumWidth(220)
-        self._combo_templates.addItem("— Wybierz szablon —")
+        self._combo_templates.setEditable(True)
+        self._combo_templates.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._combo_templates.lineEdit().setPlaceholderText("Wybierz lub wpisz nazwę szablonu...")
+        self._combo_templates.addItem("")
         self._combo_templates.currentIndexChanged.connect(self._on_template_selected)
         row1.addWidget(self._combo_templates)
 
         btn_save_tpl = QPushButton("Zapisz")
         btn_save_tpl.clicked.connect(self._on_save_template)
         row1.addWidget(btn_save_tpl)
+
+        btn_edit_tpl = QPushButton("Edytuj")
+        btn_edit_tpl.clicked.connect(self._on_edit_template)
+        row1.addWidget(btn_edit_tpl)
 
         btn_del_tpl = QPushButton("Usuń")
         btn_del_tpl.clicked.connect(self._on_delete_template)
@@ -92,6 +100,9 @@ class MessagePanel(QGroupBox):
     def get_message(self) -> str:
         return self._editor.toPlainText().strip()
 
+    def clear_message(self):
+        self._editor.clear()
+
     def _on_text_changed(self):
         text = self._editor.toPlainText()
         count = len(text)
@@ -121,7 +132,7 @@ class MessagePanel(QGroupBox):
     def _on_template_selected(self, index: int):
         if index <= 0 or not self._template_manager:
             return
-        name = self._combo_templates.currentText()
+        name = self._combo_templates.itemText(index)
         content = self._template_manager.load(name)
         if content:
             self._editor.setPlainText(content)
@@ -134,27 +145,111 @@ class MessagePanel(QGroupBox):
             QMessageBox.warning(self, "Pusta treść", "Wpisz treść szablonu przed zapisem.")
             return
 
-        name, ok = QInputDialog.getText(self, "Zapisz szablon", "Nazwa szablonu:")
-        if ok and name.strip():
-            self._template_manager.save(name.strip(), text)
-            self._refresh_templates()
-            self._combo_templates.setCurrentText(name.strip())
+        name = self._combo_templates.currentText().strip()
+        if not name:
+            name, ok = QInputDialog.getText(self, "Zapisz szablon", "Nazwa szablonu:")
+            if not ok or not name.strip():
+                return
+            name = name.strip()
+
+        existing = self._template_manager.list_names()
+        if name in existing:
+            reply = QMessageBox.question(
+                self, "Nadpisać szablon?",
+                f"Szablon „{name}” już istnieje. Nadpisać go nową treścią?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        self._template_manager.save(name, text)
+        self._refresh_templates()
+        self._combo_templates.setCurrentText(name)
+
+    def _on_edit_template(self):
+        if not self._template_manager:
+            return
+        name = self._combo_templates.currentText().strip()
+        if not name or name not in self._template_manager.list_names():
+            QMessageBox.information(
+                self, "Wybierz szablon",
+                "Najpierw wybierz szablon do edycji z listy.",
+            )
+            return
+
+        content = self._template_manager.load(name) or ""
+        new_text = self._open_edit_dialog(name, content)
+        if new_text is None:
+            return
+
+        self._template_manager.save(name, new_text)
+        if self._combo_templates.currentText().strip() == name:
+            self._editor.setPlainText(new_text)
+
+    def _open_edit_dialog(self, name: str, content: str) -> str | None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Edytuj szablon — {name}")
+        dlg.resize(520, 280)
+
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        lbl = QLabel(f"Treść szablonu „{name}”:")
+        layout.addWidget(lbl)
+
+        editor = QTextEdit()
+        editor.setPlainText(content)
+        editor.setMinimumHeight(160)
+        layout.addWidget(editor)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Save).setText("Zapisz")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Anuluj")
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+        layout.addWidget(buttons)
+
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return None
+
+        new_text = editor.toPlainText().strip()
+        if not new_text:
+            QMessageBox.warning(self, "Pusta treść", "Treść szablonu nie może być pusta.")
+            return None
+        return new_text
 
     def _on_delete_template(self):
         if not self._template_manager:
             return
-        index = self._combo_templates.currentIndex()
-        if index <= 0:
+        name = self._combo_templates.currentText().strip()
+        if not name or name not in self._template_manager.list_names():
             return
-        name = self._combo_templates.currentText()
+        reply = QMessageBox.question(
+            self, "Usunąć szablon?",
+            f"Czy na pewno usunąć szablon „{name}”?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
         self._template_manager.delete(name)
         self._refresh_templates()
 
     def _refresh_templates(self):
+        current = self._combo_templates.currentText().strip()
         self._combo_templates.blockSignals(True)
         self._combo_templates.clear()
-        self._combo_templates.addItem("— Wybierz szablon —")
+        self._combo_templates.addItem("")
         if self._template_manager:
             for name in self._template_manager.list_names():
                 self._combo_templates.addItem(name)
+        if current and current in (self._template_manager.list_names() if self._template_manager else []):
+            self._combo_templates.setCurrentText(current)
+        else:
+            self._combo_templates.setCurrentIndex(0)
+            self._combo_templates.lineEdit().clear()
         self._combo_templates.blockSignals(False)
