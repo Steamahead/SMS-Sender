@@ -143,9 +143,92 @@ QLineEdit:focus, QTextEdit:focus, QComboBox:focus {{
     border-color: {COLORS['input_focus']};
 }}
 
+QComboBox {{
+    padding-right: 28px;
+}}
+
 QComboBox::drop-down {{
-    border: none;
-    width: 20px;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left: 1px solid {COLORS['border']};
+    background-color: {COLORS['hover']};
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}}
+
+QComboBox::drop-down:hover {{
+    background-color: {COLORS['accent_light']};
+}}
+
+QComboBox::down-arrow {{
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid {COLORS['text']};
+    width: 0;
+    height: 0;
+    margin-right: 6px;
+}}
+
+QComboBox QAbstractItemView {{
+    background-color: {COLORS['surface']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 6px;
+    selection-background-color: {COLORS['accent_light']};
+    selection-color: {COLORS['text']};
+    padding: 4px;
+    outline: 0;
+}}
+
+QComboBox QAbstractItemView::item {{
+    padding: 6px 8px;
+    border-radius: 4px;
+    min-height: 20px;
+}}
+
+QComboBox QAbstractItemView::item:hover {{
+    background-color: {COLORS['hover']};
+}}
+
+QDialog {{
+    background-color: {COLORS['bg']};
+}}
+
+QMessageBox {{
+    background-color: {COLORS['bg']};
+}}
+
+QMessageBox QLabel {{
+    color: {COLORS['text']};
+    font-size: 13px;
+    padding: 4px;
+}}
+
+QMessageBox QPushButton {{
+    min-width: 90px;
+    min-height: 30px;
+    padding: 6px 14px;
+}}
+
+QInputDialog {{
+    background-color: {COLORS['bg']};
+}}
+
+QInputDialog QLabel {{
+    color: {COLORS['text']};
+    font-size: 13px;
+}}
+
+QInputDialog QLineEdit {{
+    min-width: 280px;
+    padding: 6px 10px;
+    font-size: 13px;
+}}
+
+QInputDialog QPushButton {{
+    min-width: 90px;
+    min-height: 30px;
 }}
 
 QTableWidget {{

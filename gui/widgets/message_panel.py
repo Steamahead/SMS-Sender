@@ -13,7 +13,7 @@ from gui.styles import COLORS
 class MessagePanel(QGroupBox):
     """Panel for composing SMS message with templates and character counter."""
 
-    MAX_CHARS = 320
+    MAX_CHARS = 500
     message_changed = Signal(str)
 
     def __init__(self, template_manager=None, parent=None):
@@ -31,12 +31,14 @@ class MessagePanel(QGroupBox):
         row1 = QHBoxLayout()
         row1.setSpacing(8)
 
+        lbl_tpl = QLabel("Szablon:")
+        lbl_tpl.setProperty("class", "dim")
+        row1.addWidget(lbl_tpl)
+
         self._combo_templates = QComboBox()
         self._combo_templates.setMinimumWidth(220)
-        self._combo_templates.setEditable(True)
-        self._combo_templates.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self._combo_templates.lineEdit().setPlaceholderText("Wybierz lub wpisz nazwę szablonu...")
-        self._combo_templates.addItem("")
+        self._combo_templates.setProperty("class", "tpl")
+        self._combo_templates.addItem("— wybierz szablon —")
         self._combo_templates.currentIndexChanged.connect(self._on_template_selected)
         row1.addWidget(self._combo_templates)
 
@@ -69,7 +71,7 @@ class MessagePanel(QGroupBox):
 
         bottom_row = QHBoxLayout()
 
-        self._lbl_chars = QLabel("Znaki: 0/320 (1 SMS)")
+        self._lbl_chars = QLabel(f"Znaki: 0/{self.MAX_CHARS} (1 SMS)")
         self._lbl_chars.setProperty("class", "dim")
         bottom_row.addWidget(self._lbl_chars)
 
@@ -145,20 +147,37 @@ class MessagePanel(QGroupBox):
             QMessageBox.warning(self, "Pusta treść", "Wpisz treść szablonu przed zapisem.")
             return
 
-        name = self._combo_templates.currentText().strip()
-        if not name:
-            name, ok = QInputDialog.getText(self, "Zapisz szablon", "Nazwa szablonu:")
-            if not ok or not name.strip():
-                return
-            name = name.strip()
+        idx = self._combo_templates.currentIndex()
+        selected_name = self._combo_templates.itemText(idx).strip() if idx > 0 else ""
 
-        existing = self._template_manager.list_names()
-        if name in existing:
+        if selected_name:
             reply = QMessageBox.question(
                 self, "Nadpisać szablon?",
-                f"Szablon „{name}” już istnieje. Nadpisać go nową treścią?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                f"Nadpisać szablon „{selected_name}” nową treścią?\n\n"
+                f"Jeśli chcesz zapisać jako nowy — kliknij Nie i zostaniesz zapytany o nazwę.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                return
+            if reply == QMessageBox.StandardButton.Yes:
+                self._template_manager.save(selected_name, text)
+                self._refresh_templates()
+                self._combo_templates.setCurrentText(selected_name)
+                return
+
+        name, ok = QInputDialog.getText(self, "Zapisz nowy szablon", "Nazwa szablonu:")
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+
+        if name in self._template_manager.list_names():
+            reply = QMessageBox.question(
+                self, "Nadpisać szablon?",
+                f"Szablon „{name}” już istnieje. Nadpisać go?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
             )
             if reply != QMessageBox.StandardButton.Yes:
                 return
@@ -170,13 +189,14 @@ class MessagePanel(QGroupBox):
     def _on_edit_template(self):
         if not self._template_manager:
             return
-        name = self._combo_templates.currentText().strip()
-        if not name or name not in self._template_manager.list_names():
+        idx = self._combo_templates.currentIndex()
+        if idx <= 0:
             QMessageBox.information(
                 self, "Wybierz szablon",
-                "Najpierw wybierz szablon do edycji z listy.",
+                "Najpierw wybierz szablon z listy rozwijanej, potem kliknij „Edytuj”.",
             )
             return
+        name = self._combo_templates.itemText(idx).strip()
 
         content = self._template_manager.load(name) or ""
         new_text = self._open_edit_dialog(name, content)
@@ -184,34 +204,58 @@ class MessagePanel(QGroupBox):
             return
 
         self._template_manager.save(name, new_text)
-        if self._combo_templates.currentText().strip() == name:
+        if self._combo_templates.currentIndex() == idx:
             self._editor.setPlainText(new_text)
 
     def _open_edit_dialog(self, name: str, content: str) -> str | None:
+        from gui.styles import COLORS as _C
         dlg = QDialog(self)
-        dlg.setWindowTitle(f"Edytuj szablon — {name}")
-        dlg.resize(520, 280)
+        dlg.setWindowTitle("Edytuj szablon")
+        dlg.setModal(True)
+        dlg.resize(560, 360)
+        dlg.setStyleSheet(f"QDialog {{ background-color: {_C['bg']}; }}")
 
-        layout = QVBoxLayout(dlg)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(8)
+        outer = QVBoxLayout(dlg)
+        outer.setContentsMargins(20, 18, 20, 18)
+        outer.setSpacing(14)
 
-        lbl = QLabel(f"Treść szablonu „{name}”:")
-        layout.addWidget(lbl)
+        header = QLabel(f"Edytuj szablon: <span style='color:{_C['accent']};'>{name}</span>")
+        header.setStyleSheet(f"font-size: 15px; font-weight: 600; color: {_C['text']};")
+        outer.addWidget(header)
+
+        hint = QLabel("Zmień treść szablonu. Zmiany zapisują się dla nazwy bieżącego szablonu.")
+        hint.setStyleSheet(f"color: {_C['text_secondary']}; font-size: 12px;")
+        hint.setWordWrap(True)
+        outer.addWidget(hint)
 
         editor = QTextEdit()
         editor.setPlainText(content)
-        editor.setMinimumHeight(160)
-        layout.addWidget(editor)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        editor.setMinimumHeight(180)
+        editor.setStyleSheet(
+            f"QTextEdit {{ background-color: {_C['surface']}; border: 1px solid {_C['border']};"
+            f" border-radius: 6px; padding: 8px; font-size: 13px; color: {_C['text']}; }}"
+            f"QTextEdit:focus {{ border-color: {_C['accent']}; }}"
         )
-        buttons.button(QDialogButtonBox.StandardButton.Save).setText("Zapisz")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Anuluj")
-        buttons.accepted.connect(dlg.accept)
-        buttons.rejected.connect(dlg.reject)
-        layout.addWidget(buttons)
+        outer.addWidget(editor, stretch=1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        btn_cancel = QPushButton("Anuluj")
+        btn_cancel.setMinimumWidth(110)
+        btn_cancel.setMinimumHeight(34)
+        btn_cancel.clicked.connect(dlg.reject)
+        btn_row.addWidget(btn_cancel)
+
+        btn_save = QPushButton("Zapisz zmiany")
+        btn_save.setProperty("class", "primary")
+        btn_save.setMinimumWidth(140)
+        btn_save.setMinimumHeight(34)
+        btn_save.setDefault(True)
+        btn_save.clicked.connect(dlg.accept)
+        btn_row.addWidget(btn_save)
+
+        outer.addLayout(btn_row)
 
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return None
@@ -225,9 +269,14 @@ class MessagePanel(QGroupBox):
     def _on_delete_template(self):
         if not self._template_manager:
             return
-        name = self._combo_templates.currentText().strip()
-        if not name or name not in self._template_manager.list_names():
+        idx = self._combo_templates.currentIndex()
+        if idx <= 0:
+            QMessageBox.information(
+                self, "Wybierz szablon",
+                "Najpierw wybierz szablon z listy rozwijanej, potem kliknij „Usuń”.",
+            )
             return
+        name = self._combo_templates.itemText(idx).strip()
         reply = QMessageBox.question(
             self, "Usunąć szablon?",
             f"Czy na pewno usunąć szablon „{name}”?",
@@ -240,16 +289,17 @@ class MessagePanel(QGroupBox):
         self._refresh_templates()
 
     def _refresh_templates(self):
-        current = self._combo_templates.currentText().strip()
+        idx = self._combo_templates.currentIndex()
+        current = self._combo_templates.itemText(idx).strip() if idx > 0 else ""
         self._combo_templates.blockSignals(True)
         self._combo_templates.clear()
-        self._combo_templates.addItem("")
+        self._combo_templates.addItem("— wybierz szablon —")
         if self._template_manager:
             for name in self._template_manager.list_names():
                 self._combo_templates.addItem(name)
-        if current and current in (self._template_manager.list_names() if self._template_manager else []):
-            self._combo_templates.setCurrentText(current)
+        if current:
+            i = self._combo_templates.findText(current)
+            self._combo_templates.setCurrentIndex(i if i > 0 else 0)
         else:
             self._combo_templates.setCurrentIndex(0)
-            self._combo_templates.lineEdit().clear()
         self._combo_templates.blockSignals(False)
