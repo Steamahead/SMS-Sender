@@ -1,11 +1,16 @@
 import os
 
+import threading
+
 from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QComboBox, QInputDialog, QMessageBox, QDialog,
     QDialogButtonBox,
 )
 from PySide6.QtCore import Signal
+
+from gui.widgets.ai_variants_dialog import AIVariantsDialog
+from core.ai_refine import refine_message, AIRefineError
 
 from gui.styles import COLORS
 
@@ -15,13 +20,21 @@ class MessagePanel(QGroupBox):
 
     MAX_CHARS = 500
     message_changed = Signal(str)
+    ai_settings_requested = Signal()
+    _ai_result_signal = Signal(dict, str)
+    _ai_error_signal = Signal(str)
 
-    def __init__(self, template_manager=None, parent=None):
+    def __init__(self, template_manager=None, settings=None, parent=None):
         super().__init__("Treść SMS", parent)
         self._template_manager = template_manager
+        self._settings = settings
         self._headers = []
         self._recipient_count = 0
+        self._ai_in_progress = False
         self._build_ui()
+        self._ai_result_signal.connect(self._on_ai_result)
+        self._ai_error_signal.connect(self._on_ai_error)
+        self.refresh_ai_button()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -55,6 +68,22 @@ class MessagePanel(QGroupBox):
         row1.addWidget(btn_del_tpl)
 
         row1.addStretch()
+
+        from gui.styles import COLORS as _C
+        self._btn_ai = QPushButton("🪄  Popraw AI")
+        self._btn_ai.setToolTip("Asystent AI poprawi treść — kliknij, aby zobaczyć trzy warianty")
+        self._btn_ai.setMinimumHeight(30)
+        self._btn_ai.setStyleSheet(
+            f"QPushButton {{ background-color: {_C['accent_light']}; "
+            f"color: {_C['accent_dark']}; border: 1px solid {_C['accent']}; "
+            f"border-radius: 6px; padding: 5px 14px; font-weight: 600; }}"
+            f"QPushButton:hover {{ background-color: {_C['accent']}; color: white; }}"
+            f"QPushButton:disabled {{ background-color: {_C['hover']}; "
+            f"color: {_C['text_dim']}; border-color: {_C['border']}; }}"
+        )
+        self._btn_ai.clicked.connect(self._on_ai_click)
+        row1.addWidget(self._btn_ai)
+
         layout.addLayout(row1)
 
         self._lbl_variables = QLabel("")
@@ -104,6 +133,63 @@ class MessagePanel(QGroupBox):
 
     def clear_message(self):
         self._editor.clear()
+
+    def refresh_ai_button(self):
+        if self._settings and self._settings.ai_enabled:
+            self._btn_ai.show()
+        else:
+            self._btn_ai.hide()
+
+    def _on_ai_click(self):
+        if not self._settings or not self._settings.ai_enabled:
+            self.ai_settings_requested.emit()
+            return
+        if not self._settings.gemini_api_key.strip():
+            self.ai_settings_requested.emit()
+            return
+
+        text = self._editor.toPlainText().strip()
+        if not text:
+            QMessageBox.information(
+                self, "Pusta treść",
+                "Wpisz wstępną treść SMS-a, którą asystent ma poprawić.",
+            )
+            return
+        if self._ai_in_progress:
+            return
+
+        self._ai_in_progress = True
+        self._btn_ai.setEnabled(False)
+        self._btn_ai.setText("⏳  Generuję…")
+        api_key = self._settings.gemini_api_key
+        threading.Thread(
+            target=self._ai_worker, args=(api_key, text), daemon=True
+        ).start()
+
+    def _ai_worker(self, api_key: str, text: str):
+        try:
+            variants = refine_message(api_key, text)
+            self._ai_result_signal.emit(variants, text)
+        except AIRefineError as e:
+            self._ai_error_signal.emit(str(e))
+        except Exception as e:
+            self._ai_error_signal.emit(f"Nieoczekiwany błąd: {e}")
+
+    def _on_ai_result(self, variants: dict, original: str):
+        self._ai_in_progress = False
+        self._btn_ai.setEnabled(True)
+        self._btn_ai.setText("🪄  Popraw AI")
+        dlg = AIVariantsDialog(original, variants, self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_text = dlg.selected_text()
+            if new_text:
+                self._editor.setPlainText(new_text)
+
+    def _on_ai_error(self, message: str):
+        self._ai_in_progress = False
+        self._btn_ai.setEnabled(True)
+        self._btn_ai.setText("🪄  Popraw AI")
+        QMessageBox.warning(self, "Asystent AI", message)
 
     def _on_text_changed(self):
         text = self._editor.toPlainText()

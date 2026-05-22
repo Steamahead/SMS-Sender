@@ -11,10 +11,10 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 
 ## Pobierz i zainstaluj
 
-**[⬇ Pobierz instalator (SMSSender_Setup_2.0.3.exe)](https://github.com/Steamahead/SMS-Sender/releases/latest)**
+**[⬇ Pobierz instalator (SMSSender_Setup_2.1.0.exe)](https://github.com/Steamahead/SMS-Sender/releases/latest)**
 
 1. Kliknij link powyżej
-2. Uruchom pobrany plik `SMSSender_Setup_2.0.3.exe`
+2. Uruchom pobrany plik `SMSSender_Setup_2.1.0.exe`
 3. Podążaj za kreatorem — domyślne ustawienia są OK
 
 > **Uwaga:** Windows SmartScreen może ostrzec o „nieznanym wydawcy" — kliknij *Więcej informacji* → *Uruchom mimo to*. Aplikacja nie jest podpisana certyfikatem komercyjnym, ale jest w pełni bezpieczna — kod źródłowy jest publiczny w tym repozytorium.
@@ -36,6 +36,29 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 - **Raport po wysyłce** — eksport do XLSX lub CSV
 - **Zapamiętywanie ustawień** między uruchomieniami
 - Pełna **obsługa polskich znaków** (ą, ę, ś, ć, ź, ż, ó, ł, ń) w UI i w wiadomościach
+- **Asystent AI (Gemini)** — opcjonalny: kliknięcie „🪄 Popraw AI" generuje trzy warianty SMS-a (korekta, formalny, przyjazny) do wyboru
+
+---
+
+## Asystent AI — opcjonalna „magiczna różdżka"
+
+W panelu treści SMS możesz włączyć asystenta AI, który poprawi gramatykę, interpunkcję i ton wiadomości. Kliknięcie różdżki generuje **trzy warianty**:
+
+- **Korekta** — minimalna poprawa oryginału (gramatyka, interpunkcja, polskie znaki)
+- **Formalny** — urzędowy, profesjonalny ton
+- **Przyjazny** — ciepły, ludzki, bezpośredni
+
+Wybierasz wariant, który najbardziej Ci pasuje, jednym kliknięciem. Placeholdery typu `{imie}` są zawsze zachowywane.
+
+### Konfiguracja w 3 krokach (jednorazowo)
+
+1. Wejdź na **[aistudio.google.com/apikey](https://aistudio.google.com/apikey)** i zaloguj się kontem Google
+2. Kliknij **„Create API key"** — wygeneruj klucz (darmowy plan Gemini ma hojny limit, ~1500 zapytań dziennie)
+3. W aplikacji otwórz zakładkę **Ustawienia**, wklej klucz, zaznacz „Włącz asystenta AI", kliknij **Zapisz**
+
+Klucz API zapisany jest **lokalnie na Twoim komputerze** (w `%APPDATA%\SMSSender\settings.json`) i nigdy nie opuszcza Twojego komputera poza wywołania do Gemini.
+
+> **Uwaga:** treść SMS-a wysyłana do AI trafia na serwery Google. **Nie wysyłaj danych wrażliwych** (PESEL, dane medyczne, hasła) — używaj AI tylko do tekstów ogólnych (zaproszenia, powiadomienia, przypomnienia).
 
 ---
 
@@ -51,7 +74,7 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 ## Instalacja
 
 1. Pobierz instalator ze strony [Releases](https://github.com/Steamahead/SMS-Sender/releases/latest)
-2. Uruchom plik `SMSSender_Setup_2.0.3.exe` — podążaj za kreatorem (domyślne ustawienia są OK)
+2. Uruchom plik `SMSSender_Setup_2.1.0.exe` — podążaj za kreatorem (domyślne ustawienia są OK)
 3. Opcjonalnie zaznacz **„Utwórz ikonę na pulpicie"**
 4. Po instalacji aplikacja startuje automatycznie
 
@@ -166,7 +189,7 @@ Wymaga **Inno Setup 6** (https://jrsoftware.org/isdl.php):
 iscc installer/sms_sender.iss
 ```
 
-Output: `dist/installer/SMSSender_Setup_2.0.3.exe`
+Output: `dist/installer/SMSSender_Setup_2.1.0.exe`
 
 ### Stos technologiczny
 - Python 3.11+

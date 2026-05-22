@@ -10,6 +10,8 @@ _DEFAULTS = {
     "window_x": -1,
     "window_y": -1,
     "last_template": "",
+    "gemini_api_key": "",
+    "ai_enabled": False,
 }
 
 
@@ -91,3 +93,19 @@ class Settings:
     @last_template.setter
     def last_template(self, value: str) -> None:
         self._set("last_template", value)
+
+    @property
+    def gemini_api_key(self) -> str:
+        return self._data["gemini_api_key"]
+
+    @gemini_api_key.setter
+    def gemini_api_key(self, value: str) -> None:
+        self._set("gemini_api_key", value)
+
+    @property
+    def ai_enabled(self) -> bool:
+        return bool(self._data["ai_enabled"])
+
+    @ai_enabled.setter
+    def ai_enabled(self, value: bool) -> None:
+        self._set("ai_enabled", bool(value))

@@ -15,6 +15,7 @@ from gui.widgets.preview_table import PreviewTable
 from gui.widgets.send_panel import SendPanel
 from gui.widgets.history_view import HistoryView
 from gui.widgets.about_dialog import AboutTab
+from gui.widgets.settings_tab import SettingsTab
 from core.history import HistoryManager
 from core.settings import Settings
 from core.template_manager import TemplateManager
@@ -63,6 +64,7 @@ class MainWindow(QMainWindow):
 
         self._build_send_tab()
         self._build_history_tab()
+        self._build_settings_tab()
         self._build_about_tab()
 
         self._status = QStatusBar()
@@ -91,8 +93,12 @@ class MainWindow(QMainWindow):
         self._import_panel.headers_changed.connect(self._on_headers_changed)
         layout.addWidget(self._import_panel, stretch=0)
 
-        self._message_panel = MessagePanel(template_manager=self._template_manager)
+        self._message_panel = MessagePanel(
+            template_manager=self._template_manager,
+            settings=self._settings,
+        )
         self._message_panel.message_changed.connect(self._on_message_changed)
+        self._message_panel.ai_settings_requested.connect(self._on_ai_settings_requested)
         layout.addWidget(self._message_panel, stretch=0)
 
         self._preview_table = PreviewTable()
@@ -111,8 +117,22 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._history_view, "Historia")
         self._tabs.currentChanged.connect(self._on_tab_changed)
 
+    def _build_settings_tab(self):
+        self._settings_tab = SettingsTab(self._settings)
+        self._settings_tab.settings_changed.connect(self._on_settings_changed)
+        self._tabs.addTab(self._settings_tab, "Ustawienia")
+
     def _build_about_tab(self):
         self._tabs.addTab(AboutTab(), "O aplikacji")
+
+    def _on_settings_changed(self):
+        self._message_panel.refresh_ai_button()
+
+    def _on_ai_settings_requested(self):
+        idx = self._tabs.indexOf(self._settings_tab)
+        if idx >= 0:
+            self._tabs.setCurrentIndex(idx)
+            self._settings_tab.focus_api_key_field()
 
     def _on_tab_changed(self, index):
         if index == 1:
