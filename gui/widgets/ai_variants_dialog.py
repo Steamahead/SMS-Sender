@@ -28,6 +28,7 @@ class AIVariantsDialog(QDialog):
         self._selected_key = "korekta"
         self._radios = {}
         self._previews = {}
+        self._cards = {}
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 18, 20, 18)
@@ -95,11 +96,9 @@ class AIVariantsDialog(QDialog):
 
     def _build_variant_card(self, key: str, title: str, desc: str, text: str) -> QFrame:
         card = QFrame()
-        card.setStyleSheet(
-            f"QFrame {{ background-color: {COLORS['surface']}; "
-            f"border: 1px solid {COLORS['border']}; border-radius: 8px; }}"
-            f"QFrame:hover {{ border-color: {COLORS['accent']}; }}"
-        )
+        card.setObjectName(f"variantCard_{key}")
+        self._cards[key] = card
+        self._apply_card_style(card, selected=False)
 
         cl = QVBoxLayout(card)
         cl.setContentsMargins(14, 10, 14, 12)
@@ -146,6 +145,21 @@ class AIVariantsDialog(QDialog):
     def _on_variant_selected(self, key: str, checked: bool):
         if checked:
             self._selected_key = key
+        for k, card in self._cards.items():
+            self._apply_card_style(card, selected=(k == self._selected_key))
+
+    def _apply_card_style(self, card: QFrame, selected: bool):
+        if selected:
+            card.setStyleSheet(
+                f"QFrame#{card.objectName()} {{ background-color: {COLORS['accent_light']}; "
+                f"border: 2px solid {COLORS['accent']}; border-radius: 8px; }}"
+            )
+        else:
+            card.setStyleSheet(
+                f"QFrame#{card.objectName()} {{ background-color: {COLORS['surface']}; "
+                f"border: 1px solid {COLORS['border']}; border-radius: 8px; }}"
+                f"QFrame#{card.objectName()}:hover {{ border-color: {COLORS['accent']}; }}"
+            )
 
     def selected_text(self) -> str:
         return self._variants.get(self._selected_key, "")

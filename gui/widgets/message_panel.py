@@ -67,10 +67,8 @@ class MessagePanel(QGroupBox):
         btn_del_tpl.clicked.connect(self._on_delete_template)
         row1.addWidget(btn_del_tpl)
 
-        row1.addStretch()
-
         from gui.styles import COLORS as _C
-        self._btn_ai = QPushButton("🪄  Popraw AI")
+        self._btn_ai = QPushButton("🪄  Popraw z AI")
         self._btn_ai.setToolTip("Asystent AI poprawi treść — kliknij, aby zobaczyć trzy warianty")
         self._btn_ai.setMinimumHeight(30)
         self._btn_ai.setStyleSheet(
@@ -84,6 +82,7 @@ class MessagePanel(QGroupBox):
         self._btn_ai.clicked.connect(self._on_ai_click)
         row1.addWidget(self._btn_ai)
 
+        row1.addStretch()
         layout.addLayout(row1)
 
         self._lbl_variables = QLabel("")
@@ -178,7 +177,7 @@ class MessagePanel(QGroupBox):
     def _on_ai_result(self, variants: dict, original: str):
         self._ai_in_progress = False
         self._btn_ai.setEnabled(True)
-        self._btn_ai.setText("🪄  Popraw AI")
+        self._btn_ai.setText("🪄  Popraw z AI")
         dlg = AIVariantsDialog(original, variants, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             new_text = dlg.selected_text()
@@ -188,7 +187,7 @@ class MessagePanel(QGroupBox):
     def _on_ai_error(self, message: str):
         self._ai_in_progress = False
         self._btn_ai.setEnabled(True)
-        self._btn_ai.setText("🪄  Popraw AI")
+        self._btn_ai.setText("🪄  Popraw z AI")
         QMessageBox.warning(self, "Asystent AI", message)
 
     def _on_text_changed(self):
