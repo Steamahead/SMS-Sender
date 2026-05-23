@@ -1,10 +1,12 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem,
-    QHeaderView, QGroupBox, QSplitter,
+    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
+    QHeaderView, QGroupBox, QSplitter, QDialog, QLabel, QTextEdit,
+    QPushButton,
 )
 from PySide6.QtCore import Qt
 
 from core.history import HistoryManager
+from gui.styles import COLORS
 
 
 class HistoryView(QWidget):
@@ -14,6 +16,7 @@ class HistoryView(QWidget):
         super().__init__(parent)
         self._hm = history_manager
         self._session_ids = []
+        self._sessions_cache = []
         self._build_ui()
 
     def _build_ui(self):
@@ -52,7 +55,12 @@ class HistoryView(QWidget):
         self._sessions_table.setAlternatingRowColors(True)
         self._sessions_table.setShowGrid(False)
         self._sessions_table.currentCellChanged.connect(self._on_session_selected)
+        self._sessions_table.cellDoubleClicked.connect(self._on_session_double_clicked)
         sessions_layout.addWidget(self._sessions_table)
+
+        hint = QLabel("💡 Kliknij dwukrotnie wiersz, aby zobaczyć pełną treść SMS-a")
+        hint.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 11px;")
+        sessions_layout.addWidget(hint)
 
         splitter.addWidget(sessions_group)
 
@@ -90,33 +98,41 @@ class HistoryView(QWidget):
 
     def refresh(self):
         sessions = self._hm.list_sessions()
+        self._sessions_cache = sessions
         self._sessions_table.setRowCount(len(sessions))
         self._session_ids = []
 
         for i, s in enumerate(sessions):
             self._session_ids.append(s["id"])
 
-            date_item = QTableWidgetItem(s["created_at"][:19].replace("T", " "))
-            date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._sessions_table.setItem(i, 0, date_item)
+            date_text = s["created_at"][:19].replace("T", " ")
+            file_text = s["source_file"] or ""
+            msg_full = s["message"] or ""
+            msg_short = (msg_full[:140] + "…") if len(msg_full) > 140 else msg_full
 
-            file_item = QTableWidgetItem(s["source_file"])
-            file_item.setFlags(file_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._sessions_table.setItem(i, 1, file_item)
+            for col, (text, tooltip) in enumerate([
+                (date_text, date_text),
+                (file_text, file_text),
+                (msg_short, msg_full),
+            ]):
+                item = QTableWidgetItem(text)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if tooltip:
+                    item.setToolTip(tooltip)
+                self._sessions_table.setItem(i, col, item)
 
-            msg_item = QTableWidgetItem(s["message"][:80] + "..." if len(s["message"]) > 80 else s["message"])
-            msg_item.setFlags(msg_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._sessions_table.setItem(i, 2, msg_item)
+            for col, value in [(3, str(s["sent"])), (4, str(s["errors"]))]:
+                item = QTableWidgetItem(value)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                item.setTextAlignment(Qt.AlignCenter)
+                self._sessions_table.setItem(i, col, item)
 
-            sent_item = QTableWidgetItem(str(s["sent"]))
-            sent_item.setFlags(sent_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            sent_item.setTextAlignment(Qt.AlignCenter)
-            self._sessions_table.setItem(i, 3, sent_item)
-
-            err_item = QTableWidgetItem(str(s["errors"]))
-            err_item.setFlags(err_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            err_item.setTextAlignment(Qt.AlignCenter)
-            self._sessions_table.setItem(i, 4, err_item)
+    def _on_session_double_clicked(self, row: int, col: int):
+        if row < 0 or row >= len(self._sessions_cache):
+            return
+        s = self._sessions_cache[row]
+        dlg = SessionDetailsDialog(s, self)
+        dlg.exec()
 
     def _on_session_selected(self, row, col, prev_row, prev_col):
         if row < 0 or row >= len(self._session_ids):
@@ -141,3 +157,59 @@ class HistoryView(QWidget):
             error_item = QTableWidgetItem(r.get("error", "") or "")
             error_item.setFlags(error_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._details_table.setItem(i, 2, error_item)
+
+
+class SessionDetailsDialog(QDialog):
+    """Modal showing the full SMS content + metadata for a history session."""
+
+    def __init__(self, session: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Szczegóły wysyłki")
+        self.setModal(True)
+        self.resize(560, 380)
+        self.setStyleSheet(f"QDialog {{ background-color: {COLORS['bg']}; }}")
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 18)
+        outer.setSpacing(12)
+
+        date = (session.get("created_at") or "")[:19].replace("T", " ")
+        source = session.get("source_file") or "—"
+        message = session.get("message") or ""
+
+        meta = QLabel(
+            f"<table style='font-size:13px;'>"
+            f"<tr><td style='color:{COLORS['text_secondary']}; padding-right:14px;'>Data:</td>"
+            f"<td><b>{date}</b></td></tr>"
+            f"<tr><td style='color:{COLORS['text_secondary']}; padding-right:14px;'>Źródło:</td>"
+            f"<td>{source}</td></tr>"
+            f"<tr><td style='color:{COLORS['text_secondary']}; padding-right:14px;'>Wysłano:</td>"
+            f"<td>{session.get('sent', 0)} · błędy: {session.get('errors', 0)}</td></tr>"
+            f"</table>"
+        )
+        meta.setTextFormat(Qt.TextFormat.RichText)
+        outer.addWidget(meta)
+
+        lbl_msg = QLabel("Treść SMS-a")
+        lbl_msg.setStyleSheet(f"font-weight: 600; color: {COLORS['text']}; margin-top: 4px;")
+        outer.addWidget(lbl_msg)
+
+        editor = QTextEdit()
+        editor.setPlainText(message)
+        editor.setReadOnly(True)
+        editor.setStyleSheet(
+            f"QTextEdit {{ background-color: {COLORS['surface']}; "
+            f"border: 1px solid {COLORS['border']}; border-radius: 6px; "
+            f"padding: 10px; font-size: 13px; color: {COLORS['text']}; }}"
+        )
+        outer.addWidget(editor, stretch=1)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_close = QPushButton("Zamknij")
+        btn_close.setMinimumWidth(100)
+        btn_close.setMinimumHeight(32)
+        btn_close.setDefault(True)
+        btn_close.clicked.connect(self.accept)
+        btn_row.addWidget(btn_close)
+        outer.addLayout(btn_row)

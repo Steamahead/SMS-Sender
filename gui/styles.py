@@ -206,9 +206,11 @@ QMessageBox QLabel {{
 }}
 
 QMessageBox QPushButton {{
-    min-width: 90px;
-    min-height: 30px;
-    padding: 6px 14px;
+    min-width: 70px;
+    min-height: 24px;
+    max-height: 28px;
+    padding: 3px 12px;
+    font-size: 12px;
 }}
 
 QInputDialog {{

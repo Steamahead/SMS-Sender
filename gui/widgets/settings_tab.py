@@ -129,31 +129,21 @@ class SettingsTab(QWidget):
         steps.setStyleSheet(f"color: {COLORS['text']}; font-size: 13px; line-height: 1.5;")
         outer.addWidget(steps)
 
-        providers_title = QLabel("Inni dostawcy LLM — możesz użyć dowolnego z tych kluczy")
+        providers_title = QLabel("Inni dostawcy LLM")
         providers_title.setStyleSheet(
             f"font-size: 14px; font-weight: 600; color: {COLORS['text']}; margin-top: 14px;"
         )
         outer.addWidget(providers_title)
 
         providers = QLabel(
-            "<ul style='margin:0; padding-left: 20px;'>"
-            f"<li><b>Google Gemini</b> — darmowy plan, ~1500 zapytań/dzień bez podawania karty. "
-            f"Klucz: <a href='{AI_STUDIO_URL}' style='color:{COLORS['accent']};'>"
-            f"aistudio.google.com/apikey</a></li>"
-            f"<li><b>OpenAI</b> (GPT-4o-mini) — płatne, ale tanio (~$0,15 / 1 mln tokenów). "
-            f"Klucz: <a href='{OPENAI_KEYS_URL}' style='color:{COLORS['accent']};'>"
-            f"platform.openai.com/api-keys</a></li>"
-            f"<li><b>Anthropic Claude</b> (Haiku 4.5) — płatne, bardzo dobre w polskim. "
-            f"Klucz: <a href='{ANTHROPIC_KEYS_URL}' style='color:{COLORS['accent']};'>"
-            f"console.anthropic.com</a></li>"
-            "</ul>"
-            "<p style='margin-top: 10px;'>Aplikacja rozpoznaje dostawcę automatycznie po formacie "
-            "klucza (Gemini, <code>sk-</code> dla OpenAI, <code>sk-ant-</code> dla Anthropic). "
-            "Wystarczy wkleić klucz i zapisać — nic więcej nie trzeba ustawiać.</p>"
+            "<p>Możesz użyć klucza API dowolnego z dostawców: "
+            "<b>Google Gemini</b>, <b>OpenAI</b>, <b>Anthropic Claude</b>.</p>"
+            "<p>Aplikacja rozpoznaje dostawcę automatycznie po formacie klucza — "
+            "wystarczy wkleić i zapisać.</p>"
             f"<p style='color:{COLORS['error']}; margin-top: 8px;'>⚠ <b>Prywatność:</b> "
             f"treść SMS-a wysyłana do AI trafia na serwery wybranego dostawcy. "
             f"<b>Nie wysyłaj danych wrażliwych</b> (PESEL, dane medyczne, hasła) — "
-            f"używaj AI tylko do tekstów ogólnych (zaproszenia, powiadomienia, przypomnienia).</p>"
+            f"używaj AI tylko do tekstów ogólnych.</p>"
         )
         providers.setWordWrap(True)
         providers.setOpenExternalLinks(True)
