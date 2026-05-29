@@ -56,3 +56,40 @@ class TestExportReportCsv:
             lines = f.readlines()
         assert "Numer" in lines[0]
         assert "+48512345678" in lines[1]
+
+
+class TestFormulaInjection:
+    def test_xlsx_neutralizes_formula_in_message(self):
+        path = os.path.join(tempfile.mkdtemp(), "report.xlsx")
+        recipients = [
+            {"number": "+48512345678", "status": "sent",
+             "message": "=HYPERLINK(\"http://evil\")", "time": "10:00:00", "error": ""},
+        ]
+        export_report_xlsx(path, recipients)
+        wb = load_workbook(path)
+        ws = wb.active
+        assert ws.cell(2, 3).value.startswith("'=")  # apostrophe-escaped, inert
+        wb.close()
+
+    def test_csv_neutralizes_formula_in_error(self):
+        path = os.path.join(tempfile.mkdtemp(), "report.csv")
+        recipients = [
+            {"number": "+48512345678", "status": "error",
+             "message": "Hi", "time": "10:00:00", "error": "@SUM(1+1)"},
+        ]
+        export_report_csv(path, recipients)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "'@SUM(1+1)" in content
+
+    def test_normal_message_unchanged(self):
+        path = os.path.join(tempfile.mkdtemp(), "report.csv")
+        recipients = [
+            {"number": "+48512345678", "status": "sent",
+             "message": "Dzień dobry", "time": "10:00:00", "error": ""},
+        ]
+        export_report_csv(path, recipients)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "Dzień dobry" in content
+        assert "'Dzień" not in content

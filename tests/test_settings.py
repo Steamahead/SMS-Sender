@@ -1,7 +1,9 @@
 import os
+import json
 import tempfile
 
 from core.settings import Settings
+from core import crypto_store
 
 
 class TestSettings:
@@ -48,3 +50,34 @@ class TestSettings:
         s.window_y = 50
         assert s.window_width == 1200
         assert s.window_x == 100
+
+    def test_api_key_roundtrip(self):
+        path = os.path.join(tempfile.mkdtemp(), "settings.json")
+        s1 = Settings(path)
+        s1.gemini_api_key = "sk-ant-secret-123"
+        s2 = Settings(path)
+        assert s2.gemini_api_key == "sk-ant-secret-123"
+
+    def test_api_key_not_plaintext_on_disk(self):
+        if not crypto_store.is_available():
+            return  # DPAPI unavailable — encryption is a no-op here
+        path = os.path.join(tempfile.mkdtemp(), "settings.json")
+        s = Settings(path)
+        s.gemini_api_key = "sk-ant-secret-456"
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        assert raw["gemini_api_key"] != "sk-ant-secret-456"
+        assert crypto_store.is_protected(raw["gemini_api_key"])
+
+    def test_legacy_plaintext_key_is_migrated(self):
+        if not crypto_store.is_available():
+            return
+        path = os.path.join(tempfile.mkdtemp(), "settings.json")
+        # Simulate an old settings file with a plaintext key.
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"gemini_api_key": "old-plaintext-key"}, f)
+        s = Settings(path)
+        assert s.gemini_api_key == "old-plaintext-key"  # still readable
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        assert crypto_store.is_protected(raw["gemini_api_key"])  # now encrypted

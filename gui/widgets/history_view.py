@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QGroupBox, QSplitter, QDialog, QLabel, QTextEdit,
-    QPushButton,
+    QPushButton, QMessageBox,
 )
 from PySide6.QtCore import Qt
 
@@ -62,6 +62,18 @@ class HistoryView(QWidget):
         hint.setStyleSheet(f"color: {COLORS['text_secondary']}; font-size: 11px;")
         sessions_layout.addWidget(hint)
 
+        actions_row = QHBoxLayout()
+        self._btn_delete = QPushButton("Usuń zaznaczoną sesję")
+        self._btn_delete.setToolTip("Trwale usuwa zaznaczoną sesję (dane osobowe)")
+        self._btn_delete.clicked.connect(self._on_delete_session)
+        actions_row.addWidget(self._btn_delete)
+
+        self._btn_clear_all = QPushButton("Wyczyść całą historię")
+        self._btn_clear_all.clicked.connect(self._on_clear_all)
+        actions_row.addWidget(self._btn_clear_all)
+        actions_row.addStretch()
+        sessions_layout.addLayout(actions_row)
+
         splitter.addWidget(sessions_group)
 
         details_group = QGroupBox("Szczegóły sesji")
@@ -69,8 +81,10 @@ class HistoryView(QWidget):
         details_layout.setContentsMargins(8, 8, 8, 8)
 
         self._details_table = QTableWidget()
-        self._details_table.setColumnCount(3)
-        self._details_table.setHorizontalHeaderLabels(["Numer telefonu", "Status", "Szczegóły błędu"])
+        self._details_table.setColumnCount(4)
+        self._details_table.setHorizontalHeaderLabels(
+            ["Numer telefonu", "Godzina", "Status", "Szczegóły błędu"]
+        )
         self._details_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.ResizeToContents
         )
@@ -78,7 +92,10 @@ class HistoryView(QWidget):
             1, QHeaderView.ResizeMode.ResizeToContents
         )
         self._details_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch
+            2, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self._details_table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.Stretch
         )
         self._details_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
@@ -127,6 +144,43 @@ class HistoryView(QWidget):
                 item.setTextAlignment(Qt.AlignCenter)
                 self._sessions_table.setItem(i, col, item)
 
+    def _current_session_id(self):
+        row = self._sessions_table.currentRow()
+        if 0 <= row < len(self._session_ids):
+            return self._session_ids[row]
+        return None
+
+    def _on_delete_session(self):
+        sid = self._current_session_id()
+        if sid is None:
+            QMessageBox.information(self, "Brak wyboru", "Najpierw zaznacz sesję do usunięcia.")
+            return
+        resp = QMessageBox.question(
+            self, "Usuń sesję",
+            "Trwale usunąć zaznaczoną sesję z historii? Tej operacji nie można cofnąć.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resp == QMessageBox.StandardButton.Yes:
+            self._hm.delete_session(sid)
+            self._details_table.setRowCount(0)
+            self.refresh()
+
+    def _on_clear_all(self):
+        if not self._session_ids:
+            return
+        resp = QMessageBox.question(
+            self, "Wyczyść historię",
+            "Trwale usunąć CAŁĄ historię wysyłek (wszystkie numery i treści)? "
+            "Tej operacji nie można cofnąć.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resp == QMessageBox.StandardButton.Yes:
+            self._hm.clear_all()
+            self._details_table.setRowCount(0)
+            self.refresh()
+
     def _on_session_double_clicked(self, row: int, col: int):
         if row < 0 or row >= len(self._sessions_cache):
             return
@@ -150,13 +204,18 @@ class HistoryView(QWidget):
             num_item.setFlags(num_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._details_table.setItem(i, 0, num_item)
 
+            time_item = QTableWidgetItem(r.get("time", "") or "")
+            time_item.setFlags(time_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            time_item.setTextAlignment(Qt.AlignCenter)
+            self._details_table.setItem(i, 1, time_item)
+
             status_item = QTableWidgetItem(r["status"])
             status_item.setFlags(status_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._details_table.setItem(i, 1, status_item)
+            self._details_table.setItem(i, 2, status_item)
 
             error_item = QTableWidgetItem(r.get("error", "") or "")
             error_item.setFlags(error_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._details_table.setItem(i, 2, error_item)
+            self._details_table.setItem(i, 3, error_item)
 
 
 class SessionDetailsDialog(QDialog):

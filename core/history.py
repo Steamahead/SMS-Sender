@@ -1,13 +1,14 @@
 import os
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class HistoryManager:
     """Stores SMS sending history in SQLite."""
 
     MAX_SESSIONS = 1000
+    RETENTION_DAYS = 90  # RODO: auto-purge sessions older than this
 
     def __init__(self, db_path: str):
         self._db_path = db_path
@@ -44,7 +45,25 @@ class HistoryManager:
             )
             session_id = cursor.lastrowid
             self._enforce_limit(conn)
+            self._enforce_retention(conn)
             return session_id
+
+    def delete_session(self, session_id: int) -> None:
+        """Permanently delete a single session."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+
+    def clear_all(self) -> None:
+        """Permanently delete the entire sending history."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM sessions")
+
+    def _enforce_retention(self, conn: sqlite3.Connection) -> None:
+        """Delete sessions older than RETENTION_DAYS (RODO data minimisation)."""
+        if not self.RETENTION_DAYS:
+            return
+        cutoff = (datetime.now() - timedelta(days=self.RETENTION_DAYS)).isoformat()
+        conn.execute("DELETE FROM sessions WHERE created_at < ?", (cutoff,))
 
     def list_sessions(self) -> list[dict]:
         """Return all sessions, newest first."""

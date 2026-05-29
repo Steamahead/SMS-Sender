@@ -1,6 +1,8 @@
 import json
 import os
 
+from core import crypto_store
+
 
 _DEFAULTS = {
     "last_import_dir": "",
@@ -28,6 +30,14 @@ class Settings:
             with open(self._path, "r", encoding="utf-8") as f:
                 stored = json.load(f)
             self._data.update(stored)
+            self._migrate_plaintext_key()
+
+    def _migrate_plaintext_key(self) -> None:
+        """One-shot: encrypt a legacy plaintext API key found on disk."""
+        raw = self._data.get("gemini_api_key", "")
+        if raw and not crypto_store.is_protected(raw) and crypto_store.is_available():
+            self._data["gemini_api_key"] = crypto_store.protect(raw)
+            self.save()
 
     def save(self) -> None:
         os.makedirs(os.path.dirname(self._path), exist_ok=True)
@@ -96,11 +106,11 @@ class Settings:
 
     @property
     def gemini_api_key(self) -> str:
-        return self._data["gemini_api_key"]
+        return crypto_store.unprotect(self._data["gemini_api_key"])
 
     @gemini_api_key.setter
     def gemini_api_key(self, value: str) -> None:
-        self._set("gemini_api_key", value)
+        self._set("gemini_api_key", crypto_store.protect(value))
 
     @property
     def ai_enabled(self) -> bool:

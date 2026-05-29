@@ -6,6 +6,22 @@ from openpyxl import Workbook
 
 _HEADERS = ["Numer", "Status", "Tresc", "Czas", "Blad"]
 
+# Leading characters that spreadsheet apps interpret as the start of a formula.
+_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_cell(value) -> str:
+    """Neutralize CSV/Excel formula injection.
+
+    Free-text fields (message, error) may start with characters that Excel
+    treats as a formula. Prefix such values with an apostrophe so they are
+    rendered as literal text when the report is opened.
+    """
+    text = "" if value is None else str(value)
+    if text and text[0] in _FORMULA_TRIGGERS:
+        return "'" + text
+    return text
+
 
 def export_report_xlsx(path: str, recipients: list[dict]) -> None:
     """Export sending report to Excel file."""
@@ -19,9 +35,9 @@ def export_report_xlsx(path: str, recipients: list[dict]) -> None:
     for row_idx, r in enumerate(recipients, start=2):
         ws.cell(row=row_idx, column=1, value=r.get("number", ""))
         ws.cell(row=row_idx, column=2, value=r.get("status", ""))
-        ws.cell(row=row_idx, column=3, value=r.get("message", ""))
+        ws.cell(row=row_idx, column=3, value=_sanitize_cell(r.get("message", "")))
         ws.cell(row=row_idx, column=4, value=r.get("time", ""))
-        ws.cell(row=row_idx, column=5, value=r.get("error", ""))
+        ws.cell(row=row_idx, column=5, value=_sanitize_cell(r.get("error", "")))
 
     os.makedirs(os.path.dirname(path), exist_ok=True) if os.path.dirname(path) else None
     wb.save(path)
@@ -38,7 +54,7 @@ def export_report_csv(path: str, recipients: list[dict]) -> None:
             writer.writerow([
                 r.get("number", ""),
                 r.get("status", ""),
-                r.get("message", ""),
+                _sanitize_cell(r.get("message", "")),
                 r.get("time", ""),
-                r.get("error", ""),
+                _sanitize_cell(r.get("error", "")),
             ])

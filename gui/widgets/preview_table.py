@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QCheckBox, QWidget, QHBoxLayout,
-    QPushButton, QSizePolicy, QLabel, QLineEdit,
+    QPushButton, QSizePolicy, QLabel,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -31,21 +31,6 @@ class PreviewTable(QGroupBox):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(6)
-
-        # Manual number entry row
-        add_row = QHBoxLayout()
-        add_row.setSpacing(6)
-
-        self._input_number = QLineEdit()
-        self._input_number.setPlaceholderText("Wpisz numer telefonu...")
-        self._input_number.returnPressed.connect(self._on_add_number)
-        add_row.addWidget(self._input_number)
-
-        btn_add = QPushButton("Dodaj")
-        btn_add.clicked.connect(self._on_add_number)
-        add_row.addWidget(btn_add)
-
-        layout.addLayout(add_row)
 
         # Select all / deselect all + counter
         btn_row = QHBoxLayout()
@@ -144,26 +129,23 @@ class PreviewTable(QGroupBox):
         for cb in self._checks:
             cb.setChecked(False)
 
-    def _on_add_number(self):
-        raw = self._input_number.text().strip()
-        if not raw:
-            return
+    def add_number(self, raw: str) -> bool:
+        """Validate and add a manually-entered number to the list.
 
+        Returns False when the format is invalid (caller can flag the input).
+        A duplicate that is already on the list returns True (handled, no-op)."""
         is_valid, normalized, reason = validate_phone_number(raw)
         if not is_valid:
-            self._input_number.setStyleSheet(f"border: 1px solid {COLORS['error']};")
-            return
-
-        self._input_number.setStyleSheet("")
-        self._input_number.clear()
+            return False
 
         if normalized in self._numbers:
-            return  # already on list
+            return True  # already on list
 
         self._numbers.append(normalized)
         self._check_states[normalized] = True
         self._refresh()
         self.numbers_changed_locally.emit(list(self._numbers))
+        return True
 
     def _on_remove_number(self, index: int):
         if index < 0 or index >= len(self._numbers):

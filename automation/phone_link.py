@@ -74,17 +74,6 @@ def _set_clipboard(text: str) -> None:
             pass
 
 
-def _escape_for_type_keys(text: str) -> str:
-    """Escape special characters for pywinauto type_keys."""
-    result = []
-    for ch in text:
-        if ch in "+^%~{}()":
-            result.append("{" + ch + "}")
-        else:
-            result.append(ch)
-    return "".join(result)
-
-
 class PhoneLinkAutomationError(Exception):
     """Raised when Phone Link automation fails."""
     pass
@@ -130,17 +119,22 @@ class PhoneLinkSender:
             self.connect()
 
         self._log(f"Wysylam paczke: {len(numbers)} numerow")
-        escaped_msg = _escape_for_type_keys(message)
 
-        for i, number in enumerate(numbers):
-            self._log(f"  SMS {i+1}/{len(numbers)}: {number}")
-            self._send_single(number, escaped_msg)
-            if i < len(numbers) - 1:
-                time.sleep(1.0)
+        # Save the user's clipboard once and restore it after the whole batch —
+        # we use the clipboard to paste the message body (see _send_single).
+        saved_clipboard = _save_clipboard()
+        try:
+            for i, number in enumerate(numbers):
+                self._log(f"  SMS {i+1}/{len(numbers)}: {number}")
+                self._send_single(number, message)
+                if i < len(numbers) - 1:
+                    time.sleep(1.0)
+        finally:
+            _restore_clipboard(saved_clipboard)
 
         self._log("Paczka wyslana!")
 
-    def _send_single(self, number: str, escaped_msg: str) -> None:
+    def _send_single(self, number: str, message: str) -> None:
         """Send a single SMS to one recipient."""
         # Re-acquire window fresh each time
         desktop = Desktop(backend="uia")
@@ -179,8 +173,15 @@ class PhoneLinkSender:
         self._main_window.type_keys("{TAB}")
         time.sleep(0.3)
 
-        # Step 5: Type message
-        self._main_window.type_keys(escaped_msg, with_spaces=True)
+        # Step 5: Paste message via clipboard.
+        # Pasting (instead of type_keys) safely handles newlines, Polish
+        # characters and any character that type_keys would treat as a control
+        # sequence. A raw "\n" sent through type_keys would press ENTER and send
+        # the SMS prematurely, truncating multi-line messages.
+        _set_clipboard(message)
+        time.sleep(0.2)
+        self._main_window.type_keys("^v")
+        time.sleep(0.3)
 
         # Step 6: Send
         time.sleep(0.5)

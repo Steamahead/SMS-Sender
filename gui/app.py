@@ -91,6 +91,7 @@ class MainWindow(QMainWindow):
         self._import_panel = ImportPanel(settings=self._settings)
         self._import_panel.numbers_changed.connect(self._on_numbers_changed)
         self._import_panel.headers_changed.connect(self._on_headers_changed)
+        self._import_panel.number_add_requested.connect(self._on_number_add_requested)
         layout.addWidget(self._import_panel, stretch=0)
 
         self._message_panel = MessagePanel(
@@ -163,6 +164,12 @@ class MainWindow(QMainWindow):
         else:
             word = "numerów załadowanych"
         self._status.showMessage(f"{n} {word}")
+
+    def _on_number_add_requested(self, raw):
+        if self._preview_table.add_number(raw):
+            self._import_panel.mark_number_added()
+        else:
+            self._import_panel.mark_number_invalid()
 
     def _on_manual_numbers_changed(self, numbers):
         self._numbers = list(numbers)

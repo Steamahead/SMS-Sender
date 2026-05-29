@@ -80,3 +80,45 @@ class TestHistoryManager:
         hm2 = HistoryManager(path)
         sessions = hm2.list_sessions()
         assert len(sessions) == 1
+
+    def test_delete_session(self):
+        hm = self._make_manager()
+        sid1 = hm.save_session("A", "a.xlsx", [
+            {"number": "+48512345678", "status": "sent", "error": None},
+        ])
+        hm.save_session("B", "b.xlsx", [
+            {"number": "+48601234567", "status": "sent", "error": None},
+        ])
+        hm.delete_session(sid1)
+        sessions = hm.list_sessions()
+        assert len(sessions) == 1
+        assert sessions[0]["message"] == "B"
+
+    def test_clear_all(self):
+        hm = self._make_manager()
+        hm.save_session("A", "a.xlsx", [
+            {"number": "+48512345678", "status": "sent", "error": None},
+        ])
+        hm.save_session("B", "b.xlsx", [
+            {"number": "+48601234567", "status": "sent", "error": None},
+        ])
+        hm.clear_all()
+        assert hm.list_sessions() == []
+
+    def test_retention_purges_old_sessions(self):
+        hm = self._make_manager()
+        hm.RETENTION_DAYS = 30
+        # Insert a session backdated beyond the retention window.
+        with hm._conn() as conn:
+            conn.execute(
+                "INSERT INTO sessions (created_at, message, source_file, recipients_json) "
+                "VALUES (?, ?, ?, ?)",
+                ("2000-01-01T00:00:00", "old", "old.xlsx", "[]"),
+            )
+        # A new save triggers retention enforcement.
+        hm.save_session("fresh", "new.xlsx", [
+            {"number": "+48512345678", "status": "sent", "error": None},
+        ])
+        messages = [s["message"] for s in hm.list_sessions()]
+        assert "old" not in messages
+        assert "fresh" in messages

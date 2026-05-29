@@ -2,7 +2,7 @@
 ; Inno Setup script for SMS Sender
 
 #define MyAppName "SMS Sender"
-#define MyAppVersion "2.1.2"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "Damian Sadza"
 #define MyAppExeName "SMSSender.exe"
 

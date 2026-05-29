@@ -3,7 +3,7 @@ import os
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QFileDialog, QMessageBox, QGroupBox,
+    QComboBox, QFileDialog, QMessageBox, QGroupBox, QLineEdit,
 )
 from PySide6.QtCore import Signal, Qt
 
@@ -67,6 +67,7 @@ class ImportPanel(QGroupBox):
 
     numbers_changed = Signal(list, list, list)
     headers_changed = Signal(list)
+    number_add_requested = Signal(str)
 
     def __init__(self, settings=None, parent=None):
         super().__init__("Import numerów", parent)
@@ -110,9 +111,40 @@ class ImportPanel(QGroupBox):
         self._drop_zone.file_dropped.connect(self._load_file)
         layout.addWidget(self._drop_zone)
 
+        # Manual single-number entry
+        add_row = QHBoxLayout()
+        add_row.setSpacing(6)
+
+        self._input_number = QLineEdit()
+        self._input_number.setPlaceholderText("...lub wpisz numer telefonu ręcznie")
+        self._input_number.returnPressed.connect(self._on_add_clicked)
+        add_row.addWidget(self._input_number)
+
+        self._btn_add = QPushButton("Dodaj")
+        self._btn_add.setMinimumWidth(80)
+        self._btn_add.clicked.connect(self._on_add_clicked)
+        add_row.addWidget(self._btn_add)
+
+        layout.addLayout(add_row)
+
         self._lbl_summary = QLabel("")
         self._lbl_summary.setProperty("class", "dim")
         layout.addWidget(self._lbl_summary)
+
+    def _on_add_clicked(self):
+        raw = self._input_number.text().strip()
+        if not raw:
+            return
+        self.number_add_requested.emit(raw)
+
+    def mark_number_added(self):
+        """Called after a manual number was accepted — clear input."""
+        self._input_number.setStyleSheet("")
+        self._input_number.clear()
+
+    def mark_number_invalid(self):
+        """Called when a manually-entered number had an invalid format."""
+        self._input_number.setStyleSheet(f"border: 1px solid {COLORS['error']};")
 
     def _on_import_click(self):
         initial_dir = ""
@@ -220,12 +252,16 @@ class ImportPanel(QGroupBox):
     def set_enabled(self, enabled: bool):
         self._btn_import.setEnabled(enabled)
         self._combo_column.setEnabled(enabled and bool(self._current_path))
+        self._input_number.setEnabled(enabled)
+        self._btn_add.setEnabled(enabled)
 
     def reset(self):
         self._current_path = ""
         self._headers = None
         self._lbl_file.setText("Nie wybrano pliku")
         self._lbl_summary.setText("")
+        self._input_number.setStyleSheet("")
+        self._input_number.clear()
         self._combo_column.blockSignals(True)
         self._combo_column.clear()
         self._combo_column.setEnabled(False)
