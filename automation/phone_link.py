@@ -16,6 +16,23 @@ _TO_FIELD_RE = r"(?i)^(To|Do)$"
 _MSG_FIELD_RE = r"(?i)^(Send a message|Napisz wiadomo)"
 
 
+def _open_clipboard(attempts: int = 10, delay: float = 0.05) -> bool:
+    """Open the clipboard, retrying briefly if another app holds it.
+
+    The Windows clipboard is a single global resource; a clipboard manager or
+    Phone Link itself may hold it for a few milliseconds. Retrying avoids
+    silently skipping a copy/paste during a bulk send (which would otherwise
+    paste stale text). Bounded attempts — never blocks indefinitely.
+    """
+    for _ in range(attempts):
+        try:
+            win32clipboard.OpenClipboard()
+            return True
+        except Exception:
+            time.sleep(delay)
+    return False
+
+
 def _save_clipboard() -> str | None:
     """Save current clipboard text content (Unicode), or None if not text.
 
@@ -23,29 +40,35 @@ def _save_clipboard() -> str | None:
     The previous raw-ctypes implementation truncated handles to 32 bits and
     crashed the process with an access violation.
     """
+    if not _open_clipboard():
+        return None
     try:
-        win32clipboard.OpenClipboard()
-        try:
-            if win32clipboard.IsClipboardFormatAvailable(_CF_UNICODETEXT):
-                return win32clipboard.GetClipboardData(_CF_UNICODETEXT)
-            return None
-        finally:
-            win32clipboard.CloseClipboard()
+        if win32clipboard.IsClipboardFormatAvailable(_CF_UNICODETEXT):
+            return win32clipboard.GetClipboardData(_CF_UNICODETEXT)
+        return None
     except Exception:
         return None
+    finally:
+        try:
+            win32clipboard.CloseClipboard()
+        except Exception:
+            pass
 
 
 def _set_clipboard(text: str) -> None:
     """Set clipboard to the given Unicode text."""
+    if not _open_clipboard():
+        return
     try:
-        win32clipboard.OpenClipboard()
-        try:
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(_CF_UNICODETEXT, text)
-        finally:
-            win32clipboard.CloseClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardData(_CF_UNICODETEXT, text)
     except Exception:
         pass
+    finally:
+        try:
+            win32clipboard.CloseClipboard()
+        except Exception:
+            pass
 
 
 def _restore_clipboard(text: str | None) -> None:
@@ -53,6 +76,29 @@ def _restore_clipboard(text: str | None) -> None:
     if text is None:
         return
     _set_clipboard(text)
+
+
+def _wait_until(predicate, timeout: float, poll_interval: float = 0.2):
+    """Poll ``predicate`` until it returns a truthy value or ``timeout`` elapses.
+
+    Returns the truthy value (e.g. a found UI element) or ``None`` on timeout.
+    Exceptions raised by ``predicate`` are treated as "not ready yet" and
+    retried — UIA queries often raise transiently while the UI is still
+    loading. This is the condition-based-waiting pattern: it proceeds the
+    instant the UI is ready (faster than a fixed sleep) and never proceeds
+    before it is ready (safer than a fixed sleep).
+    """
+    end = time.monotonic() + timeout
+    while True:
+        try:
+            result = predicate()
+        except Exception:
+            result = None
+        if result:
+            return result
+        if time.monotonic() >= end:
+            return None
+        time.sleep(poll_interval)
 
 
 class PhoneLinkAutomationError(Exception):
@@ -131,10 +177,11 @@ class PhoneLinkSender:
         # Step 2: Open New Message via Ctrl+N
         self._main_window.set_focus()
         self._main_window.type_keys("^n")
-        time.sleep(2.0)
 
-        # Re-acquire as wrapper object for descendants search
-        win = desktop.window(title_re=".*Phone Link.*").wrapper_object()
+        # Re-acquire the compose window and wait for it to be ready, instead of a
+        # blind 2s pause. _wait_for_descendant below then polls until the "To"
+        # field actually exists — so we proceed the moment the UI is ready.
+        win = self._reacquire_window()
         self._main_window = win
 
         # Step 3: Enter single recipient
@@ -171,26 +218,26 @@ class PhoneLinkSender:
 
     def _wait_for_descendant(self, win, title: str, control_type: str, timeout: int = None):
         """Find a descendant element by exact title, polling until found."""
-        timeout = timeout or self.WAIT_TIMEOUT
-        end_time = time.time() + timeout
-        while time.time() < end_time:
+        def find():
             for elem in win.descendants(control_type=control_type):
                 try:
                     if elem.element_info.name == title:
                         return elem
                 except Exception:
                     continue
-            time.sleep(0.5)
-        raise PhoneLinkAutomationError(
-            f"Nie moge znalezc elementu: {title} ({control_type}). "
-            f"Uruchom: python tools/inspect_phone_link.py"
-        )
+            return None
+
+        elem = _wait_until(find, timeout or self.WAIT_TIMEOUT)
+        if elem is None:
+            raise PhoneLinkAutomationError(
+                f"Nie moge znalezc elementu: {title} ({control_type}). "
+                f"Uruchom: python tools/inspect_phone_link.py"
+            )
+        return elem
 
     def _wait_for_descendant_re(self, win, pattern: str, control_type: str, timeout: int = None):
         """Find a descendant element by regex on title, polling until found."""
-        timeout = timeout or self.WAIT_TIMEOUT
-        end_time = time.time() + timeout
-        while time.time() < end_time:
+        def find():
             for elem in win.descendants(control_type=control_type):
                 try:
                     name = elem.element_info.name or ""
@@ -198,11 +245,32 @@ class PhoneLinkSender:
                         return elem
                 except Exception:
                     continue
-            time.sleep(0.5)
-        raise PhoneLinkAutomationError(
-            f"Nie moge znalezc elementu: regex={pattern} ({control_type}). "
-            f"Uruchom: python tools/inspect_phone_link.py"
+            return None
+
+        elem = _wait_until(find, timeout or self.WAIT_TIMEOUT)
+        if elem is None:
+            raise PhoneLinkAutomationError(
+                f"Nie moge znalezc elementu: regex={pattern} ({control_type}). "
+                f"Uruchom: python tools/inspect_phone_link.py"
+            )
+        return elem
+
+    def _reacquire_window(self):
+        """Re-acquire the Phone Link window as a live wrapper, polling until ready.
+
+        Replaces a blind ``time.sleep(2.0)`` after Ctrl+N: returns as soon as the
+        window responds, and raises only if it never appears within the timeout.
+        """
+        desktop = Desktop(backend="uia")
+        win = _wait_until(
+            lambda: desktop.window(title_re=".*Phone Link.*").wrapper_object(),
+            timeout=self.WAIT_TIMEOUT,
         )
+        if win is None:
+            raise PhoneLinkAutomationError(
+                "Nie moge odzyskac okna Phone Link po otwarciu nowej wiadomosci."
+            )
+        return win
 
     def _find_element(self, title: str, control_type: str):
         """Find a UI element by title and control type."""
