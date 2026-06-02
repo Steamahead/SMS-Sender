@@ -1,10 +1,12 @@
 import re
 import random
 import time
-import ctypes
-import ctypes.wintypes
+
+import win32clipboard
 
 from pywinauto import Desktop
+
+_CF_UNICODETEXT = win32clipboard.CF_UNICODETEXT
 
 # Regex patterns for UI elements (partial match, locale-resilient)
 _MESSAGES_TAB_RE = r"(?i)^(Messages|Wiadomo)"
@@ -15,63 +17,42 @@ _MSG_FIELD_RE = r"(?i)^(Send a message|Napisz wiadomo)"
 
 
 def _save_clipboard() -> str | None:
-    """Save current clipboard text content."""
-    try:
-        ctypes.windll.user32.OpenClipboard(0)
-        handle = ctypes.windll.user32.GetClipboardData(13)  # CF_UNICODETEXT
-        if handle:
-            data = ctypes.c_wchar_p(handle).value
-            ctypes.windll.user32.CloseClipboard()
-            return data
-        ctypes.windll.user32.CloseClipboard()
-        return None
-    except Exception:
-        try:
-            ctypes.windll.user32.CloseClipboard()
-        except Exception:
-            pass
-        return None
+    """Save current clipboard text content (Unicode), or None if not text.
 
-
-def _restore_clipboard(text: str | None) -> None:
-    """Restore clipboard text content."""
-    if text is None:
-        return
+    Uses pywin32's win32clipboard, which handles 64-bit handles correctly.
+    The previous raw-ctypes implementation truncated handles to 32 bits and
+    crashed the process with an access violation.
+    """
     try:
-        ctypes.windll.user32.OpenClipboard(0)
-        ctypes.windll.user32.EmptyClipboard()
-        h_mem = ctypes.windll.kernel32.GlobalAlloc(0x0042, (len(text) + 1) * 2)
-        p_mem = ctypes.windll.kernel32.GlobalLock(h_mem)
-        ctypes.cdll.msvcrt.wcscpy(ctypes.c_wchar_p(p_mem), text)
-        ctypes.windll.kernel32.GlobalUnlock(h_mem)
-        ctypes.windll.user32.SetClipboardData(13, h_mem)
-        ctypes.windll.user32.CloseClipboard()
-    except Exception:
+        win32clipboard.OpenClipboard()
         try:
-            ctypes.windll.user32.CloseClipboard()
-        except Exception:
-            pass
+            if win32clipboard.IsClipboardFormatAvailable(_CF_UNICODETEXT):
+                return win32clipboard.GetClipboardData(_CF_UNICODETEXT)
+            return None
+        finally:
+            win32clipboard.CloseClipboard()
+    except Exception:
+        return None
 
 
 def _set_clipboard(text: str) -> None:
-    """Set clipboard text content."""
+    """Set clipboard to the given Unicode text."""
     try:
-        ctypes.windll.user32.OpenClipboard(0)
-        ctypes.windll.user32.EmptyClipboard()
-        h_mem = ctypes.windll.kernel32.GlobalAlloc(0x0042, (len(text) + 1) * 2)
-        if not h_mem:
-            ctypes.windll.user32.CloseClipboard()
-            return
-        p_mem = ctypes.windll.kernel32.GlobalLock(h_mem)
-        ctypes.cdll.msvcrt.wcscpy(ctypes.c_wchar_p(p_mem), text)
-        ctypes.windll.kernel32.GlobalUnlock(h_mem)
-        ctypes.windll.user32.SetClipboardData(13, h_mem)
-        ctypes.windll.user32.CloseClipboard()
-    except Exception:
+        win32clipboard.OpenClipboard()
         try:
-            ctypes.windll.user32.CloseClipboard()
-        except Exception:
-            pass
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardData(_CF_UNICODETEXT, text)
+        finally:
+            win32clipboard.CloseClipboard()
+    except Exception:
+        pass
+
+
+def _restore_clipboard(text: str | None) -> None:
+    """Restore previously saved clipboard text content."""
+    if text is None:
+        return
+    _set_clipboard(text)
 
 
 class PhoneLinkAutomationError(Exception):

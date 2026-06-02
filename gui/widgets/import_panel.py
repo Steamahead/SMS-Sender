@@ -3,9 +3,10 @@ import os
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QFileDialog, QMessageBox, QGroupBox, QLineEdit,
+    QComboBox, QFileDialog, QMessageBox, QGroupBox, QLineEdit, QSizePolicy,
 )
 from PySide6.QtCore import Signal, Qt
+from PySide6.QtGui import QKeySequence
 
 from core.excel_importer import (
     import_from_excel, import_from_csv,
@@ -16,17 +17,22 @@ from gui.styles import COLORS
 
 
 class DropZone(QLabel):
-    """Label that accepts drag & drop of files."""
+    """Label that accepts drag & drop of files and Ctrl+V paste."""
 
     file_dropped = Signal(str)
+    paste_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
-        self.setText("Przeciągnij plik Excel/CSV tutaj lub użyj Ctrl+V")
+        # Allow the zone to take keyboard focus when clicked, so Ctrl+V is
+        # delivered here (and not to whatever field had focus before).
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setText("Przeciągnij plik Excel/CSV tutaj\nlub kliknij i wklej numery (Ctrl+V)")
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
-        self.setMinimumHeight(32)
+        self.setMinimumHeight(72)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setProperty("class", "dim")
         self._default_style = (
             f"border: 2px dashed {COLORS['border']}; "
@@ -61,6 +67,22 @@ class DropZone(QLabel):
         url = event.mimeData().urls()[0].toLocalFile()
         self.file_dropped.emit(url)
 
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.StandardKey.Paste):
+            self.paste_requested.emit()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def focusInEvent(self, event):
+        # Highlight while focused so the user knows Ctrl+V will land here.
+        self.setStyleSheet(self._hover_style)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        self.setStyleSheet(self._default_style)
+        super().focusOutEvent(event)
+
 
 class ImportPanel(QGroupBox):
     """Panel for importing phone numbers from Excel/CSV, drag&drop, clipboard."""
@@ -68,6 +90,7 @@ class ImportPanel(QGroupBox):
     numbers_changed = Signal(list, list, list)
     headers_changed = Signal(list)
     number_add_requested = Signal(str)
+    paste_requested = Signal()
 
     def __init__(self, settings=None, parent=None):
         super().__init__("Import numerów", parent)
@@ -109,7 +132,8 @@ class ImportPanel(QGroupBox):
 
         self._drop_zone = DropZone()
         self._drop_zone.file_dropped.connect(self._load_file)
-        layout.addWidget(self._drop_zone)
+        self._drop_zone.paste_requested.connect(self.paste_requested.emit)
+        layout.addWidget(self._drop_zone, stretch=1)
 
         # Manual single-number entry
         add_row = QHBoxLayout()

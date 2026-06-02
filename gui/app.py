@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self._import_panel.numbers_changed.connect(self._on_numbers_changed)
         self._import_panel.headers_changed.connect(self._on_headers_changed)
         self._import_panel.number_add_requested.connect(self._on_number_add_requested)
+        self._import_panel.paste_requested.connect(self._on_global_paste)
         layout.addWidget(self._import_panel, stretch=0)
 
         self._message_panel = MessagePanel(
@@ -208,22 +209,28 @@ class MainWindow(QMainWindow):
         self._status.showMessage("Wysyłka zakończona — lista wyczyszczona, gotowy do nowej wysyłki")
 
     def _on_clear_requested(self):
-        self._reset_recipients_and_message()
-        self._status.showMessage("Lista wyczyszczona")
+        # "Wyczyść listę" clears only recipients — the SMS message is kept.
+        self._reset_recipients(clear_message=False)
+        self._status.showMessage("Lista odbiorców wyczyszczona")
 
     def _reset_recipients_and_message(self):
+        self._reset_recipients(clear_message=True)
+
+    def _reset_recipients(self, clear_message: bool):
         self._numbers = []
         self._skipped = []
         self._row_data = []
         self._headers = []
         self._import_panel.reset()
-        self._message_panel.clear_message()
         self._message_panel.set_headers([])
+        if clear_message:
+            self._message_panel.clear_message()
         self._message_panel.set_recipient_count(0)
-        self._preview_table.update_data([], [], None, "")
-        self._send_panel.set_ready(has_numbers=False, has_message=False)
+        msg = "" if clear_message else self._message_panel.get_message()
+        self._preview_table.update_data([], [], None, msg)
+        self._send_panel.set_ready(has_numbers=False, has_message=bool(msg.strip()))
         self._send_panel.set_data(
-            [], "", self._preview_table.get_selected_numbers,
+            [], msg.strip(), self._preview_table.get_selected_numbers,
         )
 
     def _on_message_changed(self, text):
