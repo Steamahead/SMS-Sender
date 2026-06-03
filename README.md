@@ -228,4 +228,3 @@ Aplikacja nie wysyła żadnych danych na zewnątrz — cała wysyłka idzie loka
 
 - Aplikacja **nie jest bramką SMS** — wysyła przez **Twój prywatny telefon**. Każdy SMS kosztuje zgodnie z Twoim abonamentem operatora.
 - Nie używaj do spamu. Masz obowiązek uzyskać zgodę odbiorców na wysyłanie wiadomości (RODO, ustawa o świadczeniu usług drogą elektroniczną).
-- Przy dużych listach (>200 numerów) Phone Link może się zawieszać — rób paczki po 50–100.
