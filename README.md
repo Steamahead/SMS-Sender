@@ -151,9 +151,6 @@ Uruchom Łącze z telefonem ręcznie i zostaw otwarte, potem wysyłaj.
 ### Pierwsze SMS‑y wyszły, potem błąd
 Łącze z telefonem czasem zgubi okno wiadomości. Zamknij je i otwórz ponownie.
 
-### Numery z `+48` nie działają
-Nieprawda — Phone Link akceptuje numery w formacie `+48500600700`. Nie usuwaj prefiksu.
-
 ### Polskie znaki wysyłają się jako „?"
 Sprawdź, czy telefon ma kodowanie UTF‑8 dla SMS‑ów. W większości nowoczesnych Androidów jest domyślnie.
 
