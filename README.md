@@ -195,7 +195,7 @@ Wymaga **Inno Setup 6** (https://jrsoftware.org/isdl.php):
 iscc installer/sms_sender.iss
 ```
 
-Output: `dist/installer/SMSSender_Setup_2.2.0.exe`
+Output: `dist/installer/SMSSender_Setup_2.2.1.exe`
 
 ### Stos technologiczny
 - Python 3.11+
