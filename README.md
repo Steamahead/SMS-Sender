@@ -1,5 +1,8 @@
 # SMS Sender
 
+<img width="1601" height="890" alt="image" src="https://github.com/user-attachments/assets/44292906-55cb-4509-abc7-060acf93dd02" />
+
+
 Aplikacja desktopowa do masowej wysyłki SMS z komputera z systemem Windows, przez oficjalną aplikację **Łącze z telefonem** (Phone Link) i telefon z Androidem.
 
 Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i małych firmach, które chcą wysłać kilkadziesiąt lub kilkaset spersonalizowanych SMS‑ów bez kupowania bramki SMS.
