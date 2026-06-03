@@ -197,12 +197,12 @@ iscc installer/sms_sender.iss
 
 Output: `dist/installer/SMSSender_Setup_2.2.1.exe`
 
-### Stos technologiczny
+### Technologie
 - Python 3.11+
 - PySide6 (Qt) — GUI
 - pywinauto (UIA) — automatyzacja Łącza z telefonem
 - openpyxl — Excel I/O
-- pytest — testy (85 testów)
+- pytest — testy
 
 ### Struktura
 ```
@@ -211,7 +211,7 @@ automation/    — pywinauto UIA — sterowanie Phone Link
 gui/           — okno, taby, widżety, style QSS
 installer/     — build.py, sms_sender.iss, icon.ico
 tools/         — pomocnicze skrypty debugowania
-tests/         — 85 testów pytest
+tests/         — testy pytest
 ```
 
 ---
