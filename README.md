@@ -1,6 +1,7 @@
 # SMS Sender
 
-<img width="1601" height="890" alt="image" src="https://github.com/user-attachments/assets/44292906-55cb-4509-abc7-060acf93dd02" />
+
+<img width="1627" height="893" alt="Screenshot 2026-06-03 204839" src="https://github.com/user-attachments/assets/5936f9fe-4a7c-4be7-b16a-2a49f39b9811" />
 
 
 
@@ -12,6 +13,8 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 > Kontakt: kontakt@fullsteam.pl | Repozytorium: https://github.com/Steamahead/SMS-Sender
 
 ---
+
+<img width="1601" height="890" alt="image" src="https://github.com/user-attachments/assets/44292906-55cb-4509-abc7-060acf93dd02" />
 
 ## Pobierz i zainstaluj
 
