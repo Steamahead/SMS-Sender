@@ -1,7 +1,8 @@
 # SMS Sender
 
+<img width="2400" height="1350" alt="cover" src="https://github.com/user-attachments/assets/a5f5b40a-582b-4043-bf5d-34419bed8d0c" />
 
-<img width="1670" height="921" alt="Screenshot 2026-06-04 074344" src="https://github.com/user-attachments/assets/9dcdda20-e258-42d5-b83b-27484de3e23a" />
+
 
 
 
