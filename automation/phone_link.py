@@ -84,6 +84,12 @@ def _digits(text: str | None) -> str:
     return re.sub(r"\D", "", text or "")
 
 
+def _normalize(text: str | None) -> str:
+    """Collapse whitespace, for comparing what we meant to type against what
+    the control reports — line endings and spacing get reformatted."""
+    return " ".join((text or "").split())
+
+
 def _read_value(elem) -> str | None:
     """Read the *value* of an Edit control, or None if it cannot be read.
 
@@ -263,21 +269,33 @@ class PhoneLinkSender:
         self._main_window.type_keys("{TAB}")
         time.sleep(0.3)
 
-        # Step 6: Paste message via clipboard.
+        # Step 6: Take hold of the message box only once Phone Link has stopped
+        # swapping it, then empty it before pasting.
+        msg_field = self._wait_for_stable_message_field()
+        msg_field.click_input()
+        time.sleep(0.3)
+        self._clear_message_field(msg_field)
+
+        # Step 7: Paste message via clipboard.
         # Pasting (instead of type_keys) safely handles newlines, Polish
         # characters and any character that type_keys would treat as a control
         # sequence. A raw "\n" sent through type_keys would press ENTER and send
         # the SMS prematurely, truncating multi-line messages.
         _set_clipboard(message)
         time.sleep(0.2)
-        self._main_window.type_keys("^v")
+        msg_field.type_keys("^v")
         time.sleep(0.4)
-        self._verify_message(win)
+        self._verify_message(message)
 
-        # Step 7: Send
+        # Step 8: Send
         time.sleep(0.5)
-        self._main_window.type_keys("{ENTER}")
+        self._press_send(msg_field)
         time.sleep(1.0)
+
+    def _press_send(self, msg_field) -> None:
+        """Actually dispatch the SMS. Separate so a dry run can skip it and
+        exercise everything up to this point against the live app."""
+        msg_field.type_keys("{ENTER}")
 
     def _focus_main_window(self) -> None:
         """Re-acquire and focus the main window fresh — wrappers go stale."""
@@ -336,15 +354,98 @@ class PhoneLinkSender:
                 f"Numer nie trafil do pola 'Do' (pole zawiera: {value!r})"
             )
 
-    def _verify_message(self, win) -> None:
-        """Fail loudly if the pasted body never made it into the message field."""
-        field = self._wait_for_descendant_re(win, _MSG_FIELD_RE, "Edit", timeout=5)
-        value = _read_value(field)
-        if value is None:
+    def _find_message_field(self):
+        """Locate the message box fresh from the desktop, or None.
+
+        Always re-queried, never cached — see _wait_for_stable_message_field.
+        """
+        try:
+            desktop = Desktop(backend="uia")
+            win = desktop.window(title_re=".*Phone Link.*").wrapper_object()
+            for elem in win.descendants(control_type="Edit"):
+                try:
+                    if not re.search(_MSG_FIELD_RE, elem.element_info.name or ""):
+                        continue
+                    if elem.is_enabled() and elem.is_visible():
+                        return elem
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return None
+
+    def _wait_for_stable_message_field(self):
+        """Return the message box once Phone Link has stopped replacing it.
+
+        Committing a recipient makes Phone Link drop the compose input box and
+        show the conversation's own one instead — a genuinely different element
+        at a different rectangle, renamed from "…New conversation with X" to
+        "…Conversation with X". A reference grabbed before that swap is dead: it
+        reads empty forever, no matter how long it is polled. That is what made
+        the body verification fail while the paste itself had worked.
+
+        Waiting for the element's identity to repeat across two consecutive
+        scans avoids grabbing the one that is about to be discarded.
+        """
+        seen = {"name": None}
+
+        def stable():
+            field = self._find_message_field()
+            if field is None:
+                seen["name"] = None
+                return None
+            try:
+                name = field.element_info.name
+            except Exception:
+                return None
+            if name and name == seen["name"]:
+                return field
+            seen["name"] = name
+            return None
+
+        field = _wait_until(stable, timeout=self.WAIT_TIMEOUT, poll_interval=0.3)
+        if field is None:
+            raise PhoneLinkAutomationError(
+                "Pole tresci SMS-a nie ustabilizowalo sie. "
+                "Uruchom: python tools/diagnose_compose.py"
+            )
+        return field
+
+    def _clear_message_field(self, field) -> None:
+        """Empty the message box before pasting.
+
+        The conversation's input box keeps whatever was left in it — live dumps
+        found three appended copies of an earlier message sitting there after
+        three failed attempts. Pasting on top of that would send the lot.
+        """
+        try:
+            field.type_keys("^a")
+            time.sleep(0.15)
+        except Exception:
+            pass
+
+    def _verify_message(self, message: str) -> None:
+        """Fail loudly unless the message box holds exactly the intended text.
+
+        Re-finds the element on every poll: a held reference can be the dead
+        pre-swap box, and polling that one never recovers. Compares content
+        rather than mere non-emptiness, so leftover text cannot pass.
+        """
+        if _read_value(self._find_message_field()) is None:
             self._log("    (nie moge odczytac pola wiadomosci — pomijam weryfikacje)")
             return
-        if not value.strip():
-            raise PhoneLinkAutomationError("Tresc SMS-a nie trafila do pola wiadomosci")
+
+        expected = _normalize(message)
+        matched = _wait_until(
+            lambda: _normalize(_read_value(self._find_message_field())) == expected,
+            timeout=5,
+            poll_interval=0.3,
+        )
+        if not matched:
+            actual = _read_value(self._find_message_field())
+            raise PhoneLinkAutomationError(
+                f"Tresc SMS-a nie trafila do pola wiadomosci (pole zawiera: {actual!r})"
+            )
 
     def _reset_compose(self) -> None:
         """Close a half-filled compose pane so the next attempt starts clean."""

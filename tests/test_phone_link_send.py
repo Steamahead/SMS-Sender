@@ -32,6 +32,10 @@ class FakeElement:
     def __init__(self, app, name, kind):
         self._app = app
         self._kind = kind
+        # Which incarnation of the message box this element points at. Phone
+        # Link swaps the box when the recipient is committed, and a reference
+        # taken before the swap keeps reading empty forever.
+        self._generation = app.msg_generation
         self.element_info = SimpleNamespace(name=name)
 
     def is_enabled(self):
@@ -50,6 +54,8 @@ class FakeElement:
         self._app.send_keys(keys, target=self._kind)
 
     def get_value(self):
+        if self._kind == "msg" and self._generation != self._app.msg_generation:
+            return ""  # dead reference to the pre-swap box
         return self._app.values[self._kind]
 
 
@@ -89,7 +95,7 @@ class FakeApp:
     entirely, reproducing the lost first recipient.
     """
 
-    def __init__(self, open_polls=3, deaf_composes=1):
+    def __init__(self, open_polls=3, deaf_composes=1, msg_leftover=""):
         self._open_polls = open_polls
         self._deaf_composes = deaf_composes
         self._polls_left = 0
@@ -101,6 +107,20 @@ class FakeApp:
         self.recipient_committed = False
         self.sent = []
         self.clipboard = ""
+        # Text already sitting in the existing conversation's input box, as
+        # seen live: a previous run's failed attempts had accumulated there.
+        self.msg_leftover = msg_leftover
+        self.msg_generation = 0
+        self._swap_pending = False
+        self._select_all = False
+
+    def _complete_swap(self):
+        if not self._swap_pending:
+            return
+        self._swap_pending = False
+        self.msg_generation += 1
+        self.values["msg"] = self.msg_leftover
+        self.focus = None
 
     # -- UIA surface -----------------------------------------------------
     def edit_fields(self):
@@ -109,10 +129,17 @@ class FakeApp:
         if self._polls_left > 0:
             self._polls_left -= 1
             return []
-        return [
-            FakeElement(self, "To", "to"),
-            FakeElement(self, "Send a message", "msg"),
-        ]
+
+        fields = []
+        if not self.recipient_committed:
+            fields.append(FakeElement(self, "To", "to"))
+        fields.append(FakeElement(self, self._msg_name(), "msg"))
+        return fields
+
+    def _msg_name(self):
+        if self.msg_generation == 0:
+            return "Send a message, New conversation with Ktos."
+        return "Send a message, Conversation with Ktos."
 
     def click(self, kind):
         if self.compose_deaf:
@@ -134,14 +161,22 @@ class FakeApp:
             self._close_compose()
             return
         if keys == "{TAB}":
+            self._complete_swap()
             self.focus = "msg" if self.focus in ("to", None) else self.focus
             return
         if keys == "{ENTER}":
             self._enter()
             return
+        if keys == "^a":
+            self._select_all = True
+            return
         if keys == "^v":
             if self.focus:
-                self.values[self.focus] += self.clipboard
+                if self._select_all:
+                    self.values[self.focus] = self.clipboard
+                else:
+                    self.values[self.focus] += self.clipboard
+            self._select_all = False
             return
         if self.focus:
             self.values[self.focus] += keys.replace("{+}", "+")
@@ -163,6 +198,11 @@ class FakeApp:
     def _enter(self):
         if self.focus == "to" and self.values["to"]:
             self.recipient_committed = True
+            # Phone Link will drop the compose input box and show the
+            # conversation's own one — a different element, carrying whatever
+            # text was left in it earlier. Live dumps put the swap a beat after
+            # ENTER, around the TAB navigation, not at ENTER itself.
+            self._swap_pending = True
         elif self.focus == "msg" and self.recipient_committed and self.values["msg"]:
             self.sent.append((self.values["to"], self.values["msg"]))
             self._close_compose()
@@ -193,6 +233,56 @@ class TestColdStartFirstRecipient:
         PhoneLinkSender().send_batch(numbers, "Tresc")
 
         assert [number for number, _ in fake_app.sent] == numbers
+
+
+class TestMessageBoxSwap:
+    """Phone Link replaces the compose input box once the recipient is committed.
+
+    Live UIA dumps show it: before ENTER the box is named "…New conversation
+    with X" at one rectangle, after the TABs it is "…Conversation with X" at a
+    different one. A reference captured before the swap reads empty forever —
+    which is why polling a held reference for 3s never recovered, and why the
+    body verification failed while the paste itself had worked fine.
+    """
+
+    def test_sends_despite_the_message_box_being_swapped(self, fake_app):
+        PhoneLinkSender()._send_single("+48512345678", "Tresc SMS-a")
+
+        assert fake_app.sent == [("+48512345678", "Tresc SMS-a")]
+
+    def test_body_verification_reads_the_live_box_not_the_dead_one(self, fake_app):
+        fake_app._deaf_composes = 0  # warm pane — nothing else can fail
+
+        PhoneLinkSender()._send_single("+48512345678", "Tresc SMS-a")
+
+        assert fake_app.composes_opened == 1  # no retry was needed
+
+
+class TestLeftoverTextIsNotSent:
+    """The conversation box can already hold text from an earlier failed run.
+
+    Live dump showed 'test 2.0test 2.0test 2.0' sitting there — three appended
+    copies from three retries. Pasting on top of that would have sent the
+    tripled text to the recipient.
+    """
+
+    def test_leftover_is_replaced_not_appended(self, fake_app):
+        fake_app.msg_leftover = "stare smieci z poprzedniej proby"
+
+        PhoneLinkSender()._send_single("+48512345678", "Wlasciwa tresc")
+
+        assert fake_app.sent == [("+48512345678", "Wlasciwa tresc")]
+
+    def test_wrong_body_is_rejected_rather_than_sent(self, fake_app, monkeypatch):
+        """If clearing somehow fails, the mismatch must stop the send."""
+        fake_app.msg_leftover = "smieci"
+        monkeypatch.setattr(pl.PhoneLinkSender, "_clear_message_field",
+                            lambda self, field: None)
+
+        with pytest.raises(PhoneLinkAutomationError):
+            PhoneLinkSender()._send_single("+48512345678", "Wlasciwa tresc")
+
+        assert fake_app.sent == []
 
 
 class TestFailuresAreNeverSilent:

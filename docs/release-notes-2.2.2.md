@@ -22,6 +22,13 @@ tam pierwsze znaki przepadały.
 **Co się zmieniło:**
 
 - Aplikacja czeka teraz, aż pole „Do" faktycznie będzie gotowe, zanim cokolwiek wpisze.
+- Po zatwierdzeniu numeru Łącze z telefonem podmienia pole treści na inne (przechodzi z
+  „nowej wiadomości" do istniejącej rozmowy). Aplikacja czeka, aż podmiana się ustabilizuje,
+  zamiast pisać do pola, którego już nie ma.
+- **Pole treści jest czyszczone przed wklejeniem.** Jeśli została w nim niedokończona
+  wiadomość z wcześniejszej próby, nie doklei się do wysyłanego SMS-a.
+- Weryfikacja sprawdza, czy w polu jest **dokładnie ta treść**, którą wysyłasz — a nie
+  tylko czy cokolwiek tam jest.
 - Przed wysłaniem **sprawdza**, czy numer i treść naprawdę znalazły się w oknie. Jeśli nie
   — powtarza próbę (do 3 razy). Ponowienie następuje zawsze **przed** wysłaniem, więc
   żaden SMS nie zostanie wysłany dwa razy.
@@ -54,6 +61,17 @@ tam pierwsze znaki przepadały.
   (`get_value` / `legacy_properties`), nigdy przez `window_text()` — dla pól UIA zwraca
   ono placeholder, więc puste pole wyglądałoby na wypełnione. Gdy wartości nie da się
   odczytać, weryfikacja loguje ostrzeżenie i przepuszcza (nie blokuje wysyłki).
+- `_wait_for_stable_message_field()` — po zatwierdzeniu odbiorcy Phone Link **podmienia
+  element** pola treści (`…New conversation with X` @ L1231–R1891 → `…Conversation with X`
+  @ L1255–R1867). Referencja złapana przed podmianą jest martwa i czyta pustkę bez
+  względu na długość pollingu — stąd fałszywe „Tresc SMS-a nie trafila". Metoda czeka, aż
+  tożsamość elementu powtórzy się w dwóch kolejnych skanach. `_verify_message()` odnajduje
+  element od nowa przy każdym odpytaniu i porównuje **treść**, nie samą niepustość.
+- `_clear_message_field()` — Ctrl+A przed wklejeniem. Zrzut UIA z żywej aplikacji pokazał
+  trzy doklejone kopie wiadomości z wcześniejszych prób w polu rozmowy; bez czyszczenia
+  poszłyby w SMS-ie.
+- `_press_send()` wydzielone, żeby `tools/dryrun_send.py` mógł przejść cały prawdziwy flow
+  bez wysyłki. Nowe `tools/diagnose_compose.py` zrzuca drzewo UIA po każdym kroku.
 - `_send_single(..., attempts=3)` ponawia całe komponowanie; `_reset_compose()` zamyka
   niedokończony panel przed kolejną próbą.
 - `send_batch(..., on_result=)` raportuje każdego odbiorcę osobno. Bez callbacku błędy
