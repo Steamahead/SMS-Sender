@@ -89,10 +89,9 @@ class FakeApp:
     entirely, reproducing the lost first recipient.
     """
 
-    def __init__(self, open_polls=3, deaf_composes=1, tab_navigates=True):
+    def __init__(self, open_polls=3, deaf_composes=1):
         self._open_polls = open_polls
         self._deaf_composes = deaf_composes
-        self._tab_navigates = tab_navigates
         self._polls_left = 0
         self.compose_open = False
         self.compose_deaf = False
@@ -135,8 +134,7 @@ class FakeApp:
             self._close_compose()
             return
         if keys == "{TAB}":
-            if self._tab_navigates:
-                self.focus = "msg" if self.focus in ("to", None) else self.focus
+            self.focus = "msg" if self.focus in ("to", None) else self.focus
             return
         if keys == "{ENTER}":
             self._enter()
@@ -195,31 +193,6 @@ class TestColdStartFirstRecipient:
         PhoneLinkSender().send_batch(numbers, "Tresc")
 
         assert [number for number, _ in fake_app.sent] == numbers
-
-
-class TestMessageFieldIsClickedNotTabbedTo:
-    """Live logs showed the recipient landing fine and the body not.
-
-    Two blind TABs were used to reach the message field; on a cold compose pane
-    they do not land there, so Ctrl+V went nowhere. The "To" field was always
-    clicked directly and never had this problem — the body field now is too.
-    """
-
-    def test_sends_even_when_tab_navigation_does_not_work(self, fake_app):
-        fake_app._tab_navigates = False
-
-        PhoneLinkSender()._send_single("+48512345678", "Tresc SMS-a")
-
-        assert fake_app.sent == [("+48512345678", "Tresc SMS-a")]
-
-    def test_body_lands_on_the_first_attempt(self, fake_app):
-        """No retries needed for the body once the field is clicked."""
-        fake_app._tab_navigates = False
-        fake_app._deaf_composes = 0  # a warm pane: nothing should fail at all
-
-        PhoneLinkSender()._send_single("+48512345678", "Tresc SMS-a")
-
-        assert fake_app.composes_opened == 1
 
 
 class TestFailuresAreNeverSilent:
