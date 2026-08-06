@@ -173,7 +173,23 @@ def main() -> None:
     else:
         print("\n(nie znalazlem pola tresci — krok 7-8 pominiety)")
 
-    print("\n--- sprzatam: ESC, nic nie wyslano ---")
+    # Empty the box before leaving. ESC alone closes the pane but leaves the
+    # probe text sitting in the conversation's input box, where a later send
+    # would paste on top of it.
+    print("\n--- sprzatam: czyszcze pole tresci i ESC, nic nie wyslano ---")
+    leftover = _find(win, _MSG_FIELD_RE)
+    if leftover is not None:
+        try:
+            leftover.click_input()
+            time.sleep(0.3)
+            leftover.type_keys("^a")
+            time.sleep(0.2)
+            leftover.type_keys("{DELETE}")
+            time.sleep(0.3)
+            print(f"  pole tresci po czyszczeniu: {_read_value(leftover)!r}")
+        except Exception as e:
+            print(f"  nie udalo sie wyczyscic pola: {e}")
+
     for _ in range(3):
         try:
             win.type_keys("{ESC}")
