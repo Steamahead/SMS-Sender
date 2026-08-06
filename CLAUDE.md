@@ -8,13 +8,15 @@ Python + PySide6 + pywinauto UIA.
 - **Status**: `docs/STATUS.md`
 
 ## Stan projektu
-- Branch: `master`
-- **85 testow PASS**: `pytest tests/ -v`
+- Branch: `master`, wersja **2.2.2** (wydana na GitHub jako Latest)
+- **128 testow PASS**: `pytest tests/ -q`
 - **Wszystkie funkcjonalnosci zaimplementowane**
 - **GUI poprawione** — kompaktowy layout, polskie znaki, ikona aplikacji
 - **Exe zbudowane**: `dist/SMSSender/SMSSender.exe`
 - Build: `python installer/build.py` (PyInstaller)
 - Installer Windows: `installer/sms_sender.iss` (wymaga Inno Setup)
+- Bump wersji zawsze w 3 miejscach: `gui/widgets/about_dialog.py`,
+  `installer/sms_sender.iss`, `README.md`
 
 ## Struktura
 ```
@@ -26,14 +28,31 @@ gui/styles.py   — QSS, COLORS dict
 gui/widgets/    — import_panel, message_panel, preview_table, send_panel, history_view
 gui/resources/  — icon.png
 installer/      — build.py, sms_sender.iss, icon.ico
-tools/          — generate_icon.py, inspect_phone_link.py, debug_new_message.py
+tools/          — generate_icon.py, inspect_phone_link.py, debug_new_message.py,
+                  diagnose_compose.py, dryrun_send.py
 ```
 
 ## Zasady pracy
 - Jezyk UI: polski z polskimi znakami (ą, ę, ś, ć, ź, ż, ó, ł, ń)
-- Testy: `pytest tests/ -v`
+- Testy: `pytest tests/ -q`
 - Commity: po angielsku, conventional commits
 - Phone Link akceptuje numery z +48 — nie stripowac prefiksu
+
+## Zmiany w automation/phone_link.py — NAJPIERW ZMIERZ
+
+Testy jednostkowe nie wystarczaja. W sesji 2.2.2 dwa fixy wyrozumowane z kodu
+nie przezyly kontaktu z zywa aplikacja, a drugi pogorszyl sprawe (2/2 → 0/2
+dostarczonych). Dopiero zrzut drzewa UIA pokazal przyczyne.
+
+1. `python tools/diagnose_compose.py <prawdziwy_numer>` — zrzuca okno FOREGROUND
+   i wszystkie pola Edit (nazwa, rect, focus, value) po kazdym kroku.
+   **Podaj numer z istniejaca konwersacja** — numer bez niej idzie inna sciezka
+   i nie odtworzy problemu.
+2. `python tools/dryrun_send.py <numer> 3` — przechodzi caly prawdziwy flow
+   z wylaczonym `_press_send`, wiec nic nie wychodzi.
+
+Znane pulapki UIA opisane w pamieci projektu (element pola tresci jest
+PODMIENIANY po zatwierdzeniu odbiorcy; pole rozmowy trzyma resztki tekstu).
 
 # context-mode — MANDATORY routing rules
 
