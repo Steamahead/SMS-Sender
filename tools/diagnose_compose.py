@@ -30,6 +30,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# The Windows console defaults to cp1252, which cannot encode the Polish
+# characters this script reads back out of the UI — printing them would kill
+# the run mid-dump. Never let the diagnostic fail on its own output.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import win32gui
 
 from pywinauto import Desktop

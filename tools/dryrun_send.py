@@ -16,6 +16,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# The Windows console defaults to cp1252 and this script prints back the Polish
+# characters it read out of the UI — without this the run dies on its own output.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from automation.phone_link import (  # noqa: E402
     PhoneLinkAutomationError,
     PhoneLinkSender,
