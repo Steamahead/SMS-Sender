@@ -22,6 +22,9 @@ tam pierwsze znaki przepadały.
 **Co się zmieniło:**
 
 - Aplikacja czeka teraz, aż pole „Do" faktycznie będzie gotowe, zanim cokolwiek wpisze.
+- Pole treści jest **klikane**, a nie wyszukiwane tabulatorem. Dotąd aplikacja zakładała,
+  że po zatwierdzeniu numeru dwa naciśnięcia Tab trafią w pole wiadomości — przy zimnym
+  oknie nie trafiały i treść wklejała się w próżnię.
 - Przed wysłaniem **sprawdza**, czy numer i treść naprawdę znalazły się w oknie. Jeśli nie
   — powtarza próbę (do 3 razy). Ponowienie następuje zawsze **przed** wysłaniem, więc
   żaden SMS nie zostanie wysłany dwa razy.
@@ -54,6 +57,9 @@ tam pierwsze znaki przepadały.
   (`get_value` / `legacy_properties`), nigdy przez `window_text()` — dla pól UIA zwraca
   ono placeholder, więc puste pole wyglądałoby na wypełnione. Gdy wartości nie da się
   odczytać, weryfikacja loguje ostrzeżenie i przepuszcza (nie blokuje wysyłki).
+- Pole treści lokalizowane i klikane (`_MSG_FIELD_RE` + `click_input()`) zamiast
+  `{TAB}{TAB}`. Weryfikacja treści odpytuje pole przez ~3 s zamiast jednego strzału —
+  wklejenie do WinUI potrafi pojawić się z opóźnieniem.
 - `_send_single(..., attempts=3)` ponawia całe komponowanie; `_reset_compose()` zamyka
   niedokończony panel przed kolejną próbą.
 - `send_batch(..., on_result=)` raportuje każdego odbiorcę osobno. Bez callbacku błędy

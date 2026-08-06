@@ -257,10 +257,15 @@ class PhoneLinkSender:
         to_field.type_keys("{ENTER}")
         time.sleep(1.5)
 
-        # Step 5: Tab to message field (1 recipient = 2 tabs)
-        self._main_window.type_keys("{TAB}")
-        time.sleep(0.2)
-        self._main_window.type_keys("{TAB}")
+        # Step 5: Focus the message field by clicking it.
+        # Two blind TABs used to be sent here on the assumption that focus would
+        # walk from the recipient chip into the body. On a cold compose pane it
+        # does not, so Ctrl+V pasted into nothing — the exact failure seen in
+        # live logs ("Tresc SMS-a nie trafila do pola wiadomosci", twice, before
+        # a third attempt got through). Clicking the field is what already made
+        # the "To" field reliable.
+        msg_field = self._wait_for_descendant_re(win, _MSG_FIELD_RE, "Edit")
+        msg_field.click_input()
         time.sleep(0.3)
 
         # Step 6: Paste message via clipboard.
@@ -271,8 +276,7 @@ class PhoneLinkSender:
         _set_clipboard(message)
         time.sleep(0.2)
         self._main_window.type_keys("^v")
-        time.sleep(0.4)
-        self._verify_message(win)
+        self._verify_message(msg_field)
 
         # Step 7: Send
         time.sleep(0.5)
@@ -336,14 +340,23 @@ class PhoneLinkSender:
                 f"Numer nie trafil do pola 'Do' (pole zawiera: {value!r})"
             )
 
-    def _verify_message(self, win) -> None:
-        """Fail loudly if the pasted body never made it into the message field."""
-        field = self._wait_for_descendant_re(win, _MSG_FIELD_RE, "Edit", timeout=5)
-        value = _read_value(field)
-        if value is None:
+    def _verify_message(self, msg_field) -> None:
+        """Fail loudly if the pasted body never made it into the message field.
+
+        Polls rather than checking once: a paste into a WinUI text box can take
+        a moment to show up, and a single snapshot taken too early would fail a
+        send that was about to be fine.
+        """
+        if _read_value(msg_field) is None:
             self._log("    (nie moge odczytac pola wiadomosci — pomijam weryfikacje)")
             return
-        if not value.strip():
+
+        pasted = _wait_until(
+            lambda: (_read_value(msg_field) or "").strip(),
+            timeout=3,
+            poll_interval=0.2,
+        )
+        if not pasted:
             raise PhoneLinkAutomationError("Tresc SMS-a nie trafila do pola wiadomosci")
 
     def _reset_compose(self) -> None:
