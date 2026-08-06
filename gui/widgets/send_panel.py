@@ -152,7 +152,32 @@ class SendPanel(QWidget):
         self._log("Zatrzymywanie wysyłki...")
 
     def _on_resume(self):
+        owed = self._owed_numbers()
+        if not owed:
+            self._log("Nie ma czego wznawiać — wszystkie SMS-y wysłane.")
+            return
+
+        # Retry exactly the numbers still owed an SMS — the failed recipients
+        # plus whatever a stop left untouched. Resending a whole batch would
+        # duplicate the SMS-es that did go out.
+        self._results = [r for r in self._results if r["number"] not in set(owed)]
+        self._batch_manager = BatchManager(owed, batch_size=20)
+        self._log(f"Wznawiam: {len(owed)} numerów")
         self._start_sending()
+
+    def _owed_numbers(self) -> list:
+        """Numbers that still need an SMS: failed recipients first, then any
+        batch this run never got to."""
+        owed = [r["number"] for r in self._results if r["status"] == "error"]
+
+        bm = self._batch_manager
+        if bm:
+            for idx in range(bm.total_batches):
+                if bm.get_status(idx) == "pending":
+                    owed.extend(bm.get_batch(idx))
+
+        seen = set()
+        return [n for n in owed if not (n in seen or seen.add(n))]
 
     def _start_sending(self):
         self._sending = True
@@ -168,6 +193,7 @@ class SendPanel(QWidget):
     def _send_loop(self):
         bm = self._batch_manager
         total = bm.total_batches
+        attempted = set()
 
         self._progress_init_signal.emit(total)
 
@@ -178,45 +204,65 @@ class SendPanel(QWidget):
             return
 
         while True:
-            idx = bm.next_pending_index()
+            idx = bm.next_pending_index(skip=attempted)
             if idx is None or self._stop_requested:
                 break
+            attempted.add(idx)
 
             batch = bm.get_batch(idx)
             self._log(f"Paczka {idx + 1}/{total} ({len(batch)} numerów)...")
 
-            try:
-                self._sender.send(batch, self._message)
-                bm.mark_sent(idx)
-                self._log(f"Paczka {idx + 1}/{total} wysłana poprawnie")
+            # Record each recipient as the automation reports it. A recipient
+            # that silently failed must never be filed under "sent" — that is
+            # what made a dropped SMS invisible and unretryable.
+            failed = []
 
-                for num in batch:
-                    self._results.append({
-                        "number": num,
-                        "status": "sent",
-                        "message": self._message,
-                        "time": time.strftime("%H:%M:%S"),
-                        "error": "",
-                    })
+            def on_result(number, ok, error, _failed=failed):
+                self._results.append({
+                    "number": number,
+                    "status": "sent" if ok else "error",
+                    "message": self._message,
+                    "time": time.strftime("%H:%M:%S"),
+                    "error": "" if ok else error,
+                })
+                if not ok:
+                    _failed.append(number)
+
+            try:
+                self._sender.send(batch, self._message, on_result=on_result)
             except Exception as e:
+                # The automation could not run at all (e.g. Phone Link vanished);
+                # nothing after this batch can work either, so stop.
                 bm.mark_error(idx, str(e))
                 self._log(f"BLAD paczka {idx + 1}/{total}: {e}")
 
+                reported = {r["number"] for r in self._results}
                 for num in batch:
-                    self._results.append({
-                        "number": num,
-                        "status": "error",
-                        "message": self._message,
-                        "time": time.strftime("%H:%M:%S"),
-                        "error": str(e),
-                    })
+                    if num not in reported:
+                        self._results.append({
+                            "number": num,
+                            "status": "error",
+                            "message": self._message,
+                            "time": time.strftime("%H:%M:%S"),
+                            "error": str(e),
+                        })
 
                 self._send_finished_signal.emit()
                 return
 
+            if failed:
+                bm.mark_error(idx, f"nie wysłano {len(failed)} z {len(batch)}")
+                self._log(
+                    f"Paczka {idx + 1}/{total}: wysłano {len(batch) - len(failed)}"
+                    f"/{len(batch)}, nieudane: {', '.join(failed)}"
+                )
+            else:
+                bm.mark_sent(idx)
+                self._log(f"Paczka {idx + 1}/{total} wysłana poprawnie")
+
             self._progress_update_signal.emit(idx + 1, total)
 
-            if bm.next_pending_index() is not None and not self._stop_requested:
+            if bm.next_pending_index(skip=attempted) is not None and not self._stop_requested:
                 delay = random.uniform(4.0, 8.0)
                 self._log(f"Czekam {delay:.1f}s...")
                 time.sleep(delay)
@@ -234,10 +280,7 @@ class SendPanel(QWidget):
         self._btn_stop.setEnabled(False)
         self._btn_export.setEnabled(bool(self._results))
 
-        if self._batch_manager:
-            summary = self._batch_manager.summary()
-            if summary["error"] > 0 or summary["pending"] > 0:
-                self._btn_resume.setEnabled(True)
+        self._btn_resume.setEnabled(bool(self._owed_numbers()))
 
         self.sending_finished.emit(self._results)
 

@@ -78,6 +78,31 @@ def _restore_clipboard(text: str | None) -> None:
     _set_clipboard(text)
 
 
+def _digits(text: str | None) -> str:
+    """Strip everything but digits, for comparing phone numbers written
+    in different notations (+48 512 345 678 vs 512345678)."""
+    return re.sub(r"\D", "", text or "")
+
+
+def _read_value(elem) -> str | None:
+    """Read the *value* of an Edit control, or None if it cannot be read.
+
+    Deliberately avoids ``window_text()``: for UIA Edit controls it returns the
+    element's Name, which for Phone Link is the placeholder ("To", "Send a
+    message"). Trusting it would make an empty field look filled.
+    """
+    try:
+        value = elem.get_value()
+        if value is not None:
+            return str(value)
+    except Exception:
+        pass
+    try:
+        return str(elem.legacy_properties().get("Value") or "")
+    except Exception:
+        return None
+
+
 def _wait_until(predicate, timeout: float, poll_interval: float = 0.2):
     """Poll ``predicate`` until it returns a truthy value or ``timeout`` elapses.
 
@@ -140,8 +165,14 @@ class PhoneLinkSender:
         except Exception:
             return False
 
-    def send_batch(self, numbers: list[str], message: str) -> None:
-        """Send individual SMS to each number in the batch."""
+    def send_batch(self, numbers: list[str], message: str, on_result=None) -> None:
+        """Send an individual SMS to each number in the batch.
+
+        ``on_result(number, ok, error)`` is called once per recipient. With a
+        callback the batch runs to completion and the caller decides what a
+        failure means; without one, a failure raises at the end of the batch so
+        it can never pass as success.
+        """
         if not self._main_window:
             self.connect()
 
@@ -150,25 +181,57 @@ class PhoneLinkSender:
         # Save the user's clipboard once and restore it after the whole batch —
         # we use the clipboard to paste the message body (see _send_single).
         saved_clipboard = _save_clipboard()
+        failures: list[str] = []
         try:
             for i, number in enumerate(numbers):
                 self._log(f"  SMS {i+1}/{len(numbers)}: {number}")
-                self._send_single(number, message)
+                try:
+                    self._send_single(number, message)
+                except PhoneLinkAutomationError as e:
+                    self._log(f"  BLAD {number}: {e}")
+                    failures.append(f"{number}: {e}")
+                    if on_result:
+                        on_result(number, False, str(e))
+                else:
+                    if on_result:
+                        on_result(number, True, "")
                 if i < len(numbers) - 1:
                     time.sleep(1.0)
         finally:
             _restore_clipboard(saved_clipboard)
 
-        self._log("Paczka wyslana!")
+        if failures and on_result is None:
+            raise PhoneLinkAutomationError(
+                f"Nie wyslano {len(failures)} z {len(numbers)} SMS-ow: "
+                + "; ".join(failures)
+            )
 
-    def _send_single(self, number: str, message: str) -> None:
-        """Send a single SMS to one recipient."""
-        # Re-acquire window fresh each time
-        desktop = Desktop(backend="uia")
-        self._main_window = desktop.window(title_re=".*Phone Link.*")
-        self._main_window.wait("visible", timeout=self.WAIT_TIMEOUT)
-        self._main_window.set_focus()
-        time.sleep(0.5)
+        sent = len(numbers) - len(failures)
+        self._log(f"Paczka: wyslano {sent}/{len(numbers)}")
+
+    def _send_single(self, number: str, message: str, attempts: int = 3) -> None:
+        """Send a single SMS to one recipient, retrying a failed compose.
+
+        Every attempt verifies the recipient and the body *before* pressing
+        ENTER, so a retry can never duplicate an SMS that already went out. The
+        retry matters most for the first recipient of a run: the compose pane is
+        cold then, and its first keystrokes are the ones Phone Link drops.
+        """
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                self._compose_and_send(number, message)
+                return
+            except PhoneLinkAutomationError as e:
+                last_error = e
+                if attempt < attempts:
+                    self._log(f"    proba {attempt}/{attempts} nieudana ({e}) — ponawiam")
+                    self._reset_compose()
+        raise last_error
+
+    def _compose_and_send(self, number: str, message: str) -> None:
+        """One attempt at composing and sending a single SMS."""
+        self._focus_main_window()
 
         # Step 1: Click Messages tab
         self._click_element_re(_MESSAGES_TAB_RE, "TabItem")
@@ -178,30 +241,29 @@ class PhoneLinkSender:
         self._main_window.set_focus()
         self._main_window.type_keys("^n")
 
-        # Re-acquire the compose window and wait for it to be ready, instead of a
-        # blind 2s pause. _wait_for_descendant below then polls until the "To"
-        # field actually exists — so we proceed the moment the UI is ready.
-        win = self._reacquire_window()
+        # Step 3: Wait for the compose pane to actually exist and be usable.
+        win, to_field = self._wait_for_compose()
         self._main_window = win
 
-        # Step 3: Enter single recipient
-        to_field = self._wait_for_descendant(win, "To", "Edit")
+        # Step 4: Enter the single recipient, then prove it landed
         to_field.click_input()
         time.sleep(0.3)
 
         escaped_num = number.replace("+", "{+}")
         to_field.type_keys(escaped_num, with_spaces=True)
         time.sleep(0.5)
+        self._verify_recipient(to_field, number)
+
         to_field.type_keys("{ENTER}")
         time.sleep(1.5)
 
-        # Step 4: Tab to message field (1 recipient = 2 tabs)
+        # Step 5: Tab to message field (1 recipient = 2 tabs)
         self._main_window.type_keys("{TAB}")
         time.sleep(0.2)
         self._main_window.type_keys("{TAB}")
         time.sleep(0.3)
 
-        # Step 5: Paste message via clipboard.
+        # Step 6: Paste message via clipboard.
         # Pasting (instead of type_keys) safely handles newlines, Polish
         # characters and any character that type_keys would treat as a control
         # sequence. A raw "\n" sent through type_keys would press ENTER and send
@@ -209,12 +271,90 @@ class PhoneLinkSender:
         _set_clipboard(message)
         time.sleep(0.2)
         self._main_window.type_keys("^v")
-        time.sleep(0.3)
+        time.sleep(0.4)
+        self._verify_message(win)
 
-        # Step 6: Send
+        # Step 7: Send
         time.sleep(0.5)
         self._main_window.type_keys("{ENTER}")
         time.sleep(1.0)
+
+    def _focus_main_window(self) -> None:
+        """Re-acquire and focus the main window fresh — wrappers go stale."""
+        desktop = Desktop(backend="uia")
+        self._main_window = desktop.window(title_re=".*Phone Link.*")
+        self._main_window.wait("visible", timeout=self.WAIT_TIMEOUT)
+        self._main_window.set_focus()
+        time.sleep(0.5)
+
+    def _wait_for_compose(self):
+        """Wait until the New Message pane is open and its "To" field is usable.
+
+        The predecessor of this method only waited for the *main* Phone Link
+        window, which always exists — so it returned instantly and the flow
+        raced a compose pane that was still initialising. Here the condition is
+        the compose pane itself: an enabled, visible "To" edit box.
+        """
+        desktop = Desktop(backend="uia")
+
+        def ready():
+            win = desktop.window(title_re=".*Phone Link.*").wrapper_object()
+            for elem in win.descendants(control_type="Edit"):
+                try:
+                    if not re.search(_TO_FIELD_RE, elem.element_info.name or ""):
+                        continue
+                    if elem.is_enabled() and elem.is_visible():
+                        return win, elem
+                except Exception:
+                    continue
+            return None
+
+        result = _wait_until(ready, timeout=self.WAIT_TIMEOUT)
+        if result is None:
+            raise PhoneLinkAutomationError(
+                "Okno nowej wiadomosci nie otworzylo sie (brak pola 'Do'). "
+                "Uruchom: python tools/inspect_phone_link.py"
+            )
+        # The field can enter the UIA tree a moment before the pane finishes
+        # animating in; settle briefly so the first keystrokes are not dropped.
+        time.sleep(0.4)
+        return result
+
+    def _verify_recipient(self, to_field, number: str) -> None:
+        """Fail loudly if the recipient never made it into the "To" field.
+
+        Compared on digits only — Phone Link reformats what it is given. Read
+        before ENTER is pressed, so a caller may safely retry.
+        """
+        value = _read_value(to_field)
+        if value is None:
+            self._log("    (nie moge odczytac pola 'Do' — pomijam weryfikacje)")
+            return
+        typed, expected = _digits(value), _digits(number)
+        if expected and expected[-9:] not in typed:
+            raise PhoneLinkAutomationError(
+                f"Numer nie trafil do pola 'Do' (pole zawiera: {value!r})"
+            )
+
+    def _verify_message(self, win) -> None:
+        """Fail loudly if the pasted body never made it into the message field."""
+        field = self._wait_for_descendant_re(win, _MSG_FIELD_RE, "Edit", timeout=5)
+        value = _read_value(field)
+        if value is None:
+            self._log("    (nie moge odczytac pola wiadomosci — pomijam weryfikacje)")
+            return
+        if not value.strip():
+            raise PhoneLinkAutomationError("Tresc SMS-a nie trafila do pola wiadomosci")
+
+    def _reset_compose(self) -> None:
+        """Close a half-filled compose pane so the next attempt starts clean."""
+        try:
+            for _ in range(2):
+                self._main_window.type_keys("{ESC}")
+                time.sleep(0.3)
+        except Exception:
+            pass
+        time.sleep(0.8)
 
     def _wait_for_descendant(self, win, title: str, control_type: str, timeout: int = None):
         """Find a descendant element by exact title, polling until found."""
@@ -254,23 +394,6 @@ class PhoneLinkSender:
                 f"Uruchom: python tools/inspect_phone_link.py"
             )
         return elem
-
-    def _reacquire_window(self):
-        """Re-acquire the Phone Link window as a live wrapper, polling until ready.
-
-        Replaces a blind ``time.sleep(2.0)`` after Ctrl+N: returns as soon as the
-        window responds, and raises only if it never appears within the timeout.
-        """
-        desktop = Desktop(backend="uia")
-        win = _wait_until(
-            lambda: desktop.window(title_re=".*Phone Link.*").wrapper_object(),
-            timeout=self.WAIT_TIMEOUT,
-        )
-        if win is None:
-            raise PhoneLinkAutomationError(
-                "Nie moge odzyskac okna Phone Link po otwarciu nowej wiadomosci."
-            )
-        return win
 
     def _find_element(self, title: str, control_type: str):
         """Find a UI element by title and control type."""

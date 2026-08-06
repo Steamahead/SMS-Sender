@@ -28,10 +28,16 @@ class BatchManager:
         self._statuses[index] = "error"
         self._errors[index] = reason
 
-    def next_pending_index(self) -> int | None:
-        """Return index of next batch to send (pending or error). None if all sent."""
+    def next_pending_index(self, skip=None) -> int | None:
+        """Return index of next batch to send (pending or error). None if all sent.
+
+        ``skip`` holds indices already attempted in the current run. Without it,
+        a batch left in "error" would be served forever, since it never reaches
+        "sent" — retrying it is a decision for the next run, not this loop.
+        """
+        skipped = skip or ()
         for i, status in enumerate(self._statuses):
-            if status != "sent":
+            if status != "sent" and i not in skipped:
                 return i
         return None
 
