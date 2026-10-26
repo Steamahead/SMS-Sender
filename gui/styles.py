@@ -122,6 +122,7 @@ QPushButton[class="primary"]:hover {{
 
 QPushButton[class="primary"]:disabled {{
     background: {COLORS['text_dim']};
+    color: white;
 }}
 
 QPushButton:disabled {{
@@ -279,7 +280,19 @@ QProgressBar::chunk {{
 QScrollBar:vertical {{
     border: none;
     background: transparent;
-    width: 8px;
+    width: 10px;
+}}
+
+/* Without this the empty track is drawn with the native hatch pattern and the
+   handle is hard to tell apart from it. */
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+    background: transparent;
+}}
+
+/* A text box with a resize grip (gui/widgets/resize_grip.py) keeps its
+   scrollbar clear of the grip in the bottom-right corner. */
+QTextEdit[resizeGrip="true"] QScrollBar:vertical {{
+    margin-bottom: 16px;
 }}
 
 QScrollBar::handle:vertical {{
@@ -323,6 +336,30 @@ QCheckBox::indicator:checked {{
     background-color: {COLORS['accent']};
     border-color: {COLORS['accent']};
     image: url("{_CHECK_ICON}");
+}}
+
+QRadioButton {{
+    spacing: 8px;
+    background: transparent;
+}}
+
+QRadioButton::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 1px solid {COLORS['text_dim']};
+    border-radius: 9px;
+    background-color: {COLORS['surface']};
+}}
+
+QRadioButton::indicator:hover {{
+    border-color: {COLORS['accent']};
+}}
+
+QRadioButton::indicator:checked {{
+    border: 1px solid {COLORS['accent']};
+    background-color: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 {COLORS['accent']}, stop:0.45 {COLORS['accent']},
+        stop:0.55 {COLORS['surface']}, stop:1 {COLORS['surface']});
 }}
 
 QCheckBox::indicator:disabled {{

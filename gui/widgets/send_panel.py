@@ -16,6 +16,7 @@ from core.personalizer import unresolved_variables
 from core.sms_counter import count_sms, strip_polish, MAX_CHARS
 from core.report import export_report_xlsx, export_report_csv
 from gui.styles import COLORS
+from gui.widgets.resize_grip import add_resize_grip
 
 
 # From this many parts on, some Android messaging apps quietly send an MMS.
@@ -137,6 +138,7 @@ class SendPanel(QWidget):
             f"border-radius: 8px; "
             f"font-size: 12px; font-family: 'Consolas', monospace;"
         )
+        add_resize_grip(self._txt_log)
         main_row.addWidget(self._txt_log, stretch=1)
 
         layout.addLayout(main_row, stretch=1)

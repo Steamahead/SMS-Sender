@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QRadioButton, QButtonGroup, QFrame, QTextEdit,
+    QRadioButton, QButtonGroup, QFrame, QTextEdit, QSplitter,
 )
 from PySide6.QtCore import Qt
 
 from gui.styles import COLORS
+from gui.widgets.resize_grip import add_resize_grip
 
 
 VARIANT_LABELS = {
@@ -21,7 +22,8 @@ class AIVariantsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Wybierz wariant — Asystent AI")
         self.setModal(True)
-        self.resize(620, 480)
+        self.setSizeGripEnabled(True)
+        self.resize(760, 760)
         self.setStyleSheet(f"QDialog {{ background-color: {COLORS['bg']}; }}")
 
         self._variants = variants
@@ -40,10 +42,18 @@ class AIVariantsDialog(QDialog):
         )
         outer.addWidget(header)
 
+        # Original and variants sit in a splitter: drag a divider, or a text
+        # box's corner grip, to give one of them more room.
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(10)
+        splitter.setStyleSheet("QSplitter::handle { background: transparent; }")
+
         if original:
             orig_card = QFrame()
+            orig_card.setObjectName("originalCard")
             orig_card.setStyleSheet(
-                f"QFrame {{ background-color: {COLORS['hover']}; "
+                f"QFrame#originalCard {{ background-color: {COLORS['hover']}; "
                 f"border: 1px solid {COLORS['border']}; border-radius: 6px; }}"
             )
             ol = QVBoxLayout(orig_card)
@@ -55,11 +65,18 @@ class AIVariantsDialog(QDialog):
                 f" text-transform: uppercase; letter-spacing: 0.5px;"
             )
             ol.addWidget(lbl_orig_title)
-            lbl_orig = QLabel(original)
-            lbl_orig.setWordWrap(True)
-            lbl_orig.setStyleSheet(f"color: {COLORS['text']}; font-size: 12px;")
-            ol.addWidget(lbl_orig)
-            outer.addWidget(orig_card)
+            txt_orig = QTextEdit()
+            txt_orig.setPlainText(original)
+            txt_orig.setReadOnly(True)
+            txt_orig.setMinimumHeight(44)
+            txt_orig.setStyleSheet(
+                f"QTextEdit {{ background-color: {COLORS['surface']}; "
+                f"border: 1px solid {COLORS['border']}; border-radius: 6px; "
+                f"padding: 4px; font-size: 12px; color: {COLORS['text']}; }}"
+            )
+            add_resize_grip(txt_orig)
+            ol.addWidget(txt_orig, stretch=1)
+            splitter.addWidget(orig_card)
 
         self._group = QButtonGroup(self)
 
@@ -68,7 +85,14 @@ class AIVariantsDialog(QDialog):
                 continue
             title, desc = VARIANT_LABELS[key]
             card = self._build_variant_card(key, title, desc, variants[key])
-            outer.addWidget(card)
+            splitter.addWidget(card)
+
+        for i in range(splitter.count()):
+            # Variants get the room; the original only as much as the user drags.
+            splitter.setStretchFactor(i, 0 if (original and i == 0) else 1)
+        if original:
+            splitter.setSizes([90] + [200] * (splitter.count() - 1))
+        outer.addWidget(splitter, stretch=1)
 
         if self._radios:
             first_key = next(iter(self._radios))
@@ -130,13 +154,14 @@ class AIVariantsDialog(QDialog):
         preview = QTextEdit()
         preview.setPlainText(text)
         preview.setReadOnly(True)
-        preview.setMaximumHeight(80)
+        preview.setMinimumHeight(60)
         preview.setStyleSheet(
             f"QTextEdit {{ background-color: {COLORS['input_bg']}; "
             f"border: 1px solid {COLORS['border']}; border-radius: 6px; "
             f"padding: 6px; font-size: 12px; color: {COLORS['text']}; }}"
         )
-        cl.addWidget(preview)
+        add_resize_grip(preview)
+        cl.addWidget(preview, stretch=1)
         self._previews[key] = preview
 
         card.mousePressEvent = lambda e, k=key: self._radios[k].setChecked(True)

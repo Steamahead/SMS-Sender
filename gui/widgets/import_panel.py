@@ -141,7 +141,9 @@ class ImportPanel(QGroupBox):
         add_row.setSpacing(6)
 
         self._input_number = QLineEdit()
-        self._input_number.setPlaceholderText("...lub wpisz numer telefonu ręcznie")
+        self._input_number.setPlaceholderText(
+            "...lub wpisz numer ręcznie (kilka: oddziel przecinkiem lub średnikiem)"
+        )
         self._input_number.returnPressed.connect(self._on_add_clicked)
         add_row.addWidget(self._input_number)
 
@@ -167,8 +169,11 @@ class ImportPanel(QGroupBox):
         self._input_number.setStyleSheet("")
         self._input_number.clear()
 
-    def mark_number_invalid(self):
-        """Called when a manually-entered number had an invalid format."""
+    def mark_number_invalid(self, leftover: str = ""):
+        """Called when (part of) the input was not a valid number: keep only
+        the part to fix in the field and flag it."""
+        if leftover:
+            self._input_number.setText(leftover)
         self._input_number.setStyleSheet(f"border: 1px solid {COLORS['error']};")
 
     def _on_import_click(self):

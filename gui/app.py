@@ -188,10 +188,11 @@ class MainWindow(QMainWindow):
         self._status.showMessage(f"{n} {word}")
 
     def _on_number_add_requested(self, raw):
-        if self._preview_table.add_number(raw):
+        added, leftover = self._preview_table.add_numbers(raw)
+        if added and not leftover:
             self._import_panel.mark_number_added()
         else:
-            self._import_panel.mark_number_invalid()
+            self._import_panel.mark_number_invalid(leftover)
 
     def _on_manual_numbers_changed(self, numbers):
         self._numbers = list(numbers)

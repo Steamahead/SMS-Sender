@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 
 from core.personalizer import render_for_numbers
-from core.excel_importer import validate_phone_number, deduplicate_numbers
+from core.excel_importer import extract_phone_numbers
 from gui.styles import COLORS
 
 
@@ -135,23 +135,25 @@ class PreviewTable(QGroupBox):
         for cb in self._checks:
             cb.setChecked(False)
 
-    def add_number(self, raw: str) -> bool:
-        """Validate and add a manually-entered number to the list.
+    def add_numbers(self, raw: str) -> tuple[bool, str]:
+        """Add manually typed numbers — one, or several separated by commas or
+        semicolons ("512 345 678; 600-700-800").
 
-        Returns False when the format is invalid (caller can flag the input).
-        A duplicate that is already on the list returns True (handled, no-op)."""
-        is_valid, normalized, reason = validate_phone_number(raw)
-        if not is_valid:
-            return False
+        Returns (any_valid, leftover): leftover is the part the caller should
+        leave in the input for the user to fix — the bad fragments, or the whole
+        text when nothing in it was a number. Duplicates count as handled."""
+        numbers, bad = extract_phone_numbers(raw)
+        if not numbers:
+            return False, raw
 
-        if normalized in self._numbers:
-            return True  # already on list
-
-        self._numbers.append(normalized)
-        self._check_states[normalized] = True
-        self._refresh()
-        self.numbers_changed_locally.emit(list(self._numbers))
-        return True
+        new = [n for n in numbers if n not in self._numbers]
+        for number in dict.fromkeys(new):
+            self._numbers.append(number)
+            self._check_states[number] = True
+        if new:
+            self._refresh()
+            self.numbers_changed_locally.emit(list(self._numbers))
+        return True, ", ".join(fragment for fragment, _ in bad)
 
     def _on_remove_number(self, index: int):
         if index < 0 or index >= len(self._numbers):

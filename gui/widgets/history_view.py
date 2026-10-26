@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt
 
 from core.history import HistoryManager
 from gui.styles import COLORS
+from gui.widgets.resize_grip import add_resize_grip
 
 
 class HistoryView(QWidget):
@@ -86,6 +87,7 @@ class HistoryView(QWidget):
         self._message_view = QTextEdit()
         self._message_view.setReadOnly(True)
         self._message_view.setPlaceholderText("Zaznacz sesję, aby zobaczyć pełną treść SMS-a")
+        add_resize_grip(self._message_view)
         message_layout.addWidget(self._message_view)
 
         splitter.addWidget(message_group)
@@ -247,7 +249,8 @@ class SessionDetailsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Szczegóły wysyłki")
         self.setModal(True)
-        self.resize(560, 380)
+        self.setSizeGripEnabled(True)
+        self.resize(640, 460)
         self.setStyleSheet(f"QDialog {{ background-color: {COLORS['bg']}; }}")
 
         outer = QVBoxLayout(self)
@@ -283,6 +286,7 @@ class SessionDetailsDialog(QDialog):
             f"border: 1px solid {COLORS['border']}; border-radius: 6px; "
             f"padding: 10px; font-size: 13px; color: {COLORS['text']}; }}"
         )
+        add_resize_grip(editor)
         outer.addWidget(editor, stretch=1)
 
         btn_row = QHBoxLayout()

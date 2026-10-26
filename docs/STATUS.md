@@ -20,6 +20,9 @@ Release: https://github.com/Steamahead/SMS-Sender/releases/tag/2.2.2 (Latest)
 - Przelacznik "Bez polskich znakow" (~2x mniej czesci), "Wyslij test do siebie",
   potwierdzenie wysylki z liczba czesci i ostrzezeniami (zmienne, MMS)
 - Rozciagane panele (QSplitter) na Wysylce i w Historii, uklad zapamietywany
+- Uchwyt w rogu kazdego pola tekstowego (`gui/widgets/resize_grip.py`): w oknie
+  glownym powieksza panel kosztem sasiadow, w dialogach zmienia rozmiar okna
+- Reczne pole numeru przyjmuje kilka numerow po przecinku/sredniku
 - Podglad odbiorcow: tabela z checkboxami, zaznacz/odznacz wszystkie,
   usuwanie pojedynczego numeru, stan checkboxow przezywa edycje wiadomosci
 

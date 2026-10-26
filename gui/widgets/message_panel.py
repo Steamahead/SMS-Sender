@@ -15,6 +15,7 @@ from core.ai_refine import refine_message, AIRefineError
 from core.personalizer import Personalizer
 from core.sms_counter import count_sms, strip_polish, MAX_CHARS
 from gui.styles import COLORS
+from gui.widgets.resize_grip import add_resize_grip
 
 
 class MessagePanel(QGroupBox):
@@ -98,6 +99,7 @@ class MessagePanel(QGroupBox):
         self._editor.setMinimumHeight(60)
         self._editor.setPlaceholderText("Wpisz treść wiadomości tutaj...")
         self._editor.textChanged.connect(self._on_text_changed)
+        add_resize_grip(self._editor)
         layout.addWidget(self._editor, stretch=1)
 
         self._lbl_var_warning = QLabel("")
@@ -364,7 +366,8 @@ class MessagePanel(QGroupBox):
         dlg = QDialog(self)
         dlg.setWindowTitle("Edytuj szablon")
         dlg.setModal(True)
-        dlg.resize(560, 360)
+        dlg.setSizeGripEnabled(True)
+        dlg.resize(640, 460)
         dlg.setStyleSheet(f"QDialog {{ background-color: {_C['bg']}; }}")
 
         outer = QVBoxLayout(dlg)
@@ -388,6 +391,7 @@ class MessagePanel(QGroupBox):
             f" border-radius: 6px; padding: 8px; font-size: 13px; color: {_C['text']}; }}"
             f"QTextEdit:focus {{ border-color: {_C['accent']}; }}"
         )
+        add_resize_grip(editor)
         outer.addWidget(editor, stretch=1)
 
         btn_row = QHBoxLayout()
