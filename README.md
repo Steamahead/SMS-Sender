@@ -21,10 +21,10 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 
 ## Pobierz i zainstaluj
 
-**[⬇ Pobierz instalator (SMSSender_Setup_2.2.2.exe)](https://github.com/Steamahead/SMS-Sender/releases/latest)**
+**[⬇ Pobierz instalator (SMSSender_Setup_2.3.0.exe)](https://github.com/Steamahead/SMS-Sender/releases/latest)**
 
 1. Kliknij link powyżej
-2. Uruchom pobrany plik `SMSSender_Setup_2.2.2.exe`
+2. Uruchom pobrany plik `SMSSender_Setup_2.3.0.exe`
 3. Podążaj za kreatorem — domyślne ustawienia są OK
 
 > **Uwaga:** Windows SmartScreen może ostrzec o „nieznanym wydawcy" — kliknij *Więcej informacji* → *Uruchom mimo to*. Aplikacja nie jest podpisana certyfikatem komercyjnym, ale jest w pełni bezpieczna — kod źródłowy jest publiczny w tym repozytorium.
@@ -86,7 +86,7 @@ Klucz API zapisany jest **lokalnie na Twoim komputerze** (w `%APPDATA%\SMSSender
 ## Instalacja
 
 1. Pobierz instalator ze strony [Releases](https://github.com/Steamahead/SMS-Sender/releases/latest)
-2. Uruchom plik `SMSSender_Setup_2.2.2.exe` — podążaj za kreatorem (domyślne ustawienia są OK)
+2. Uruchom plik `SMSSender_Setup_2.3.0.exe` — podążaj za kreatorem (domyślne ustawienia są OK)
 3. Opcjonalnie zaznacz **„Utwórz ikonę na pulpicie"**
 4. Po instalacji aplikacja startuje automatycznie
 
@@ -198,7 +198,7 @@ Wymaga **Inno Setup 6** (https://jrsoftware.org/isdl.php):
 iscc installer/sms_sender.iss
 ```
 
-Output: `dist/installer/SMSSender_Setup_2.2.2.exe`
+Output: `dist/installer/SMSSender_Setup_2.3.0.exe`
 
 ### Technologie
 - Python 3.11+
