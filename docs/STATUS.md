@@ -1,8 +1,8 @@
 # SMS Sender v2 — Status
 
-## Aktualny stan: 2.2.2 — wydane, zweryfikowane realna wysylka
+## Aktualny stan: 2.3.1 — wydane, test wysylki do siebie potwierdzony
 
-Release: https://github.com/Steamahead/SMS-Sender/releases/tag/2.2.2 (Latest)
+Release: https://github.com/Steamahead/SMS-Sender/releases/tag/2.3.1 (Latest)
 
 ## Zrealizowane funkcjonalnosci
 
@@ -66,7 +66,7 @@ Bump wersji zawsze w 3 miejscach: `gui/widgets/about_dialog.py`,
 Release: `gh release create X.Y.Z dist/installer/SMSSender_Setup_X.Y.Z.exe --title "SMS Sender X.Y.Z" --notes-file docs/release-notes-X.Y.Z.md --latest`
 (`gh` jest zalogowany z keyringa — web UI nie jest potrzebne).
 
-## Testy: 128 PASS
+## Testy: 175 PASS
 
 ```
 pytest tests/ -q

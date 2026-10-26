@@ -8,8 +8,8 @@ Python + PySide6 + pywinauto UIA.
 - **Status**: `docs/STATUS.md`
 
 ## Stan projektu
-- Branch: `master`, wersja **2.2.2** (wydana na GitHub jako Latest)
-- **128 testow PASS**: `pytest tests/ -q`
+- Branch: `master`, wersja **2.3.1** (wydana na GitHub jako Latest)
+- **175 testow PASS**: `pytest tests/ -q`
 - **Wszystkie funkcjonalnosci zaimplementowane**
 - **GUI poprawione** — kompaktowy layout, polskie znaki, ikona aplikacji
 - **Exe zbudowane**: `dist/SMSSender/SMSSender.exe`
