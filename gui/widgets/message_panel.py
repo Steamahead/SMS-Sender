@@ -5,21 +5,24 @@ import threading
 from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QComboBox, QInputDialog, QMessageBox, QDialog,
-    QDialogButtonBox,
+    QDialogButtonBox, QCheckBox,
 )
 from PySide6.QtCore import Signal
 
 from gui.widgets.ai_variants_dialog import AIVariantsDialog
 from core.ai_refine import refine_message, AIRefineError
 
+from core.personalizer import Personalizer
+from core.sms_counter import count_sms, strip_polish, MAX_CHARS
 from gui.styles import COLORS
 
 
 class MessagePanel(QGroupBox):
     """Panel for composing SMS message with templates and character counter."""
 
-    MAX_CHARS = 500
+    MAX_CHARS = MAX_CHARS
     message_changed = Signal(str)
+    strip_polish_changed = Signal(bool)
     ai_settings_requested = Signal()
     _ai_result_signal = Signal(dict, str)
     _ai_error_signal = Signal(str)
@@ -88,22 +91,37 @@ class MessagePanel(QGroupBox):
         self._lbl_variables = QLabel("")
         self._lbl_variables.setProperty("class", "dim")
         self._lbl_variables.setWordWrap(True)
+        self._lbl_variables.hide()
         layout.addWidget(self._lbl_variables)
 
         self._editor = QTextEdit()
         self._editor.setMinimumHeight(60)
-        self._editor.setMaximumHeight(90)
         self._editor.setPlaceholderText("Wpisz treść wiadomości tutaj...")
         self._editor.textChanged.connect(self._on_text_changed)
-        layout.addWidget(self._editor)
+        layout.addWidget(self._editor, stretch=1)
+
+        self._lbl_var_warning = QLabel("")
+        self._lbl_var_warning.setWordWrap(True)
+        self._lbl_var_warning.setStyleSheet(f"color: {COLORS['error']};")
+        self._lbl_var_warning.hide()
+        layout.addWidget(self._lbl_var_warning)
 
         bottom_row = QHBoxLayout()
 
-        self._lbl_chars = QLabel(f"Znaki: 0/{self.MAX_CHARS} (1 SMS)")
+        self._lbl_chars = QLabel(f"Znaki: 0/{self.MAX_CHARS} · 0 SMS")
         self._lbl_chars.setProperty("class", "dim")
         bottom_row.addWidget(self._lbl_chars)
 
         bottom_row.addStretch()
+
+        self._chk_strip_polish = QCheckBox("Bez polskich znaków")
+        self._chk_strip_polish.setToolTip(
+            "Zamienia ą→a, ł→l itd. przy wysyłce. Jeden SMS mieści wtedy 160 znaków "
+            "zamiast 70, więc długa wiadomość kosztuje około 2× mniej części."
+        )
+        self._chk_strip_polish.setChecked(bool(self._settings and self._settings.strip_polish))
+        self._chk_strip_polish.toggled.connect(self._on_strip_polish_toggled)
+        bottom_row.addWidget(self._chk_strip_polish)
 
         self._lbl_sms_count = QLabel("")
         self._lbl_sms_count.setProperty("class", "dim")
@@ -120,8 +138,54 @@ class MessagePanel(QGroupBox):
                 f"{{{h}}}" for h in headers if h
             )
             self._lbl_variables.setText(vars_text)
+            self._lbl_variables.show()
         else:
             self._lbl_variables.setText("")
+            self._lbl_variables.hide()
+        self._refresh_variable_warning()
+
+    def strip_polish_enabled(self) -> bool:
+        return self._chk_strip_polish.isChecked()
+
+    def _on_strip_polish_toggled(self, checked: bool):
+        if self._settings:
+            self._settings.strip_polish = checked
+        self._on_text_changed()
+        self.strip_polish_changed.emit(checked)
+
+    def _counted_text(self) -> str:
+        """The text as it will leave — what the operator bills for."""
+        text = self._editor.toPlainText()
+        return strip_polish(text) if self.strip_polish_enabled() else text
+
+    def _refresh_variable_warning(self):
+        text = self._editor.toPlainText()
+        p = Personalizer(text, self._headers or None)
+        if not p.variables:
+            self._lbl_var_warning.hide()
+            return
+
+        if not self._headers:
+            names = ", ".join(f"{{{v}}}" for v in dict.fromkeys(p.variables))
+            msg = (
+                f"⚠ {names}: zmienne działają tylko z plikiem Excel/CSV z nagłówkami. "
+                f"Bez niego odbiorca zobaczy je dosłownie."
+            )
+        else:
+            problems = []
+            for v in dict.fromkeys(p.missing_variables()):
+                hint = p.suggestion(v)
+                problems.append(
+                    f"{{{v}}} — chodziło o {{{hint}}}?" if hint
+                    else f"{{{v}}} — nie ma takiej kolumny"
+                )
+            if not problems:
+                self._lbl_var_warning.hide()
+                return
+            msg = "⚠ " + "; ".join(problems)
+
+        self._lbl_var_warning.setText(msg)
+        self._lbl_var_warning.show()
 
     def set_recipient_count(self, count: int):
         self._recipient_count = count
@@ -193,20 +257,23 @@ class MessagePanel(QGroupBox):
     def _on_text_changed(self):
         text = self._editor.toPlainText()
         count = len(text)
-        sms_parts = 1 if count <= 160 else 2
+        sms = count_sms(self._counted_text())
         color = COLORS["error"] if count > self.MAX_CHARS else COLORS["text_secondary"]
 
-        self._lbl_chars.setText(f"Znaki: {count}/{self.MAX_CHARS} ({sms_parts} SMS)")
+        label = f"Znaki: {count}/{self.MAX_CHARS} · {sms.parts} SMS"
+        if sms.encoding == "UCS-2" and sms.parts:
+            label += "  (polskie znaki lub emoji: 70 znaków w 1 SMS, 67 w dłuższym)"
+        self._lbl_chars.setText(label)
         self._lbl_chars.setStyleSheet(f"color: {color};")
 
+        self._refresh_variable_warning()
         self._update_sms_count()
         self.message_changed.emit(text)
 
     def _update_sms_count(self):
-        count = len(self._editor.toPlainText())
+        sms_parts = count_sms(self._counted_text()).parts
         recipients = self._recipient_count
-        if recipients > 0 and count > 0:
-            sms_parts = 1 if count <= 160 else 2
+        if recipients > 0 and sms_parts > 0:
             total = recipients * sms_parts
             self._lbl_sms_count.setText(
                 f"Odbiorcy: {recipients}  |  Łącznie: {total} SMS"

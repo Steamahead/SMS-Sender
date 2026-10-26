@@ -18,7 +18,12 @@ COLORS = {
     "input_focus": "#2563EB",
 }
 
+import os
+
 FONT_FAMILY = "Segoe UI"
+
+# Qt stylesheets need forward slashes, also on Windows.
+_CHECK_ICON = os.path.join(os.path.dirname(__file__), "resources", "check.svg").replace(os.sep, "/")
 
 QSS = f"""
 * {{
@@ -294,5 +299,34 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
 QSplitter::handle {{
     background-color: {COLORS['border']};
     height: 2px;
+}}
+
+/* The global QWidget background hides the native check mark, so draw our own. */
+QCheckBox {{
+    spacing: 8px;
+    background: transparent;
+}}
+
+QCheckBox::indicator {{
+    width: 16px;
+    height: 16px;
+    border: 1px solid {COLORS['text_dim']};
+    border-radius: 4px;
+    background-color: {COLORS['surface']};
+}}
+
+QCheckBox::indicator:hover {{
+    border-color: {COLORS['accent']};
+}}
+
+QCheckBox::indicator:checked {{
+    background-color: {COLORS['accent']};
+    border-color: {COLORS['accent']};
+    image: url("{_CHECK_ICON}");
+}}
+
+QCheckBox::indicator:disabled {{
+    background-color: {COLORS['hover']};
+    border-color: {COLORS['border']};
 }}
 """

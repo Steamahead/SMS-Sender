@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 
-from core.personalizer import Personalizer
+from core.personalizer import render_for_numbers
 from core.excel_importer import validate_phone_number, deduplicate_numbers
 from gui.styles import COLORS
 
@@ -22,6 +22,7 @@ class PreviewTable(QGroupBox):
         self._row_data = []
         self._headers = None
         self._template = ""
+        self._strip_polish = False
         self._checks = []
         self._check_states = {}  # number -> bool, preserves checkbox state
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -68,7 +69,7 @@ class PreviewTable(QGroupBox):
         self._table.verticalHeader().setVisible(False)
         self._table.setAlternatingRowColors(True)
         self._table.setShowGrid(False)
-        self._table.setMinimumHeight(350)
+        self._table.setMinimumHeight(100)
         self._table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         layout.addWidget(self._table)
@@ -89,16 +90,21 @@ class PreviewTable(QGroupBox):
         self._template = template
         self._render_message_column()
 
-    def _render_message_column(self):
-        personalizer = None
-        if self._template and self._row_data:
-            personalizer = Personalizer(self._template, self._headers)
+    def get_messages(self) -> dict[str, str]:
+        """The exact text each number on the list will receive."""
+        return render_for_numbers(
+            self._template, self._headers, self._numbers, self._row_data,
+            strip_polish=self._strip_polish,
+        )
 
+    def set_strip_polish(self, enabled: bool):
+        self._strip_polish = enabled
+        self._render_message_column()
+
+    def _render_message_column(self):
+        messages = self.get_messages()
         for i, num in enumerate(self._numbers):
-            if personalizer and i < len(self._row_data):
-                msg = personalizer.render(self._row_data[i])
-            else:
-                msg = self._template
+            msg = messages[num]
 
             item = self._table.item(i, 2)
             if item is None:
@@ -165,9 +171,7 @@ class PreviewTable(QGroupBox):
         self._table.setRowCount(count)
         self._checks = []
 
-        personalizer = None
-        if self._template and self._row_data:
-            personalizer = Personalizer(self._template, self._headers)
+        messages = self.get_messages()
 
         for i, num in enumerate(self._numbers):
             cb = QCheckBox()
@@ -186,12 +190,7 @@ class PreviewTable(QGroupBox):
             num_item.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(i, 1, num_item)
 
-            if personalizer and i < len(self._row_data):
-                msg = personalizer.render(self._row_data[i])
-            else:
-                msg = self._template
-
-            msg_item = QTableWidgetItem(msg)
+            msg_item = QTableWidgetItem(messages[num])
             msg_item.setFlags(msg_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(i, 2, msg_item)
 
@@ -200,7 +199,7 @@ class PreviewTable(QGroupBox):
             btn_remove.setFixedSize(26, 22)
             btn_remove.setToolTip("Usuń numer z listy")
             btn_remove.setStyleSheet(
-                f"QPushButton {{ color: {COLORS['text_dim']}; border: none; "
+                f"QPushButton {{ color: {COLORS['text_dim']}; border: none; padding: 0; "
                 f"font-weight: bold; font-size: 14px; background: transparent; }} "
                 f"QPushButton:hover {{ color: {COLORS['error']}; }}"
             )

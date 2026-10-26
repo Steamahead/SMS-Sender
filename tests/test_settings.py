@@ -81,3 +81,17 @@ class TestSettings:
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
         assert crypto_store.is_protected(raw["gemini_api_key"])  # now encrypted
+
+
+def test_new_options_persist(tmp_path):
+    from core.settings import Settings
+    path = str(tmp_path / "s.json")
+    s = Settings(path)
+    assert s.strip_polish is False and s.test_number == ""
+    s.strip_polish = True
+    s.test_number = "+48512345678"
+    s.set_splitter_sizes("send", [1, 2, 3, 4])
+    again = Settings(path)
+    assert again.strip_polish is True
+    assert again.test_number == "+48512345678"
+    assert again.splitter_sizes("send") == [1, 2, 3, 4]

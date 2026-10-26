@@ -3,7 +3,7 @@ import os
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout,
-    QStatusBar, QSizePolicy,
+    QStatusBar, QSizePolicy, QSplitter,
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut, QIcon
@@ -93,7 +93,6 @@ class MainWindow(QMainWindow):
         self._import_panel.headers_changed.connect(self._on_headers_changed)
         self._import_panel.number_add_requested.connect(self._on_number_add_requested)
         self._import_panel.paste_requested.connect(self._on_global_paste)
-        layout.addWidget(self._import_panel, stretch=0)
 
         self._message_panel = MessagePanel(
             template_manager=self._template_manager,
@@ -101,21 +100,39 @@ class MainWindow(QMainWindow):
         )
         self._message_panel.message_changed.connect(self._on_message_changed)
         self._message_panel.ai_settings_requested.connect(self._on_ai_settings_requested)
-        layout.addWidget(self._message_panel, stretch=0)
+        self._message_panel.strip_polish_changed.connect(self._on_strip_polish_changed)
 
         self._preview_table = PreviewTable()
         self._preview_table.numbers_changed_locally.connect(self._on_manual_numbers_changed)
         self._preview_table.clear_requested.connect(self._on_clear_requested)
-        layout.addWidget(self._preview_table, stretch=1)
+        self._preview_table.set_strip_polish(self._message_panel.strip_polish_enabled())
 
-        self._send_panel = SendPanel()
+        self._send_panel = SendPanel(settings=self._settings)
         self._send_panel.sending_finished.connect(self._on_sending_finished)
-        layout.addWidget(self._send_panel, stretch=0)
+
+        # Draggable dividers between import, message editor, recipients table and send log.
+        self._send_splitter = QSplitter(Qt.Orientation.Vertical)
+        self._send_splitter.setChildrenCollapsible(False)
+        self._send_splitter.setHandleWidth(8)
+        self._send_splitter.addWidget(self._import_panel)
+        self._send_splitter.addWidget(self._message_panel)
+        self._send_splitter.addWidget(self._preview_table)
+        self._send_splitter.addWidget(self._send_panel)
+        self._send_splitter.setStretchFactor(0, 0)
+        self._send_splitter.setStretchFactor(1, 1)
+        self._send_splitter.setStretchFactor(2, 2)
+        self._send_splitter.setStretchFactor(3, 0)
+        sizes = self._settings.splitter_sizes("send")
+        self._send_splitter.setSizes(sizes if len(sizes) == 4 else [200, 300, 250, 100])
+        layout.addWidget(self._send_splitter, stretch=1)
 
         self._tabs.addTab(tab, "Wysyłka")
 
     def _build_history_tab(self):
-        self._history_view = HistoryView(self._history_manager)
+        self._history_view = HistoryView(
+            self._history_manager,
+            splitter_sizes=self._settings.splitter_sizes("history"),
+        )
         self._tabs.addTab(self._history_view, "Historia")
         self._tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -126,6 +143,9 @@ class MainWindow(QMainWindow):
 
     def _build_about_tab(self):
         self._tabs.addTab(AboutTab(), "O aplikacji")
+
+    def _on_strip_polish_changed(self, enabled: bool):
+        self._preview_table.set_strip_polish(enabled)
 
     def _on_settings_changed(self):
         self._message_panel.refresh_ai_button()
@@ -156,6 +176,7 @@ class MainWindow(QMainWindow):
         self._send_panel.set_data(
             numbers, self._message_panel.get_message(),
             self._preview_table.get_selected_numbers,
+            self._preview_table.get_messages,
         )
         n = len(numbers)
         if n == 1:
@@ -182,6 +203,7 @@ class MainWindow(QMainWindow):
         self._send_panel.set_data(
             numbers, self._message_panel.get_message(),
             self._preview_table.get_selected_numbers,
+            self._preview_table.get_messages,
         )
         n = len(numbers)
         if n == 1:
@@ -231,6 +253,7 @@ class MainWindow(QMainWindow):
         self._send_panel.set_ready(has_numbers=False, has_message=bool(msg.strip()))
         self._send_panel.set_data(
             [], msg.strip(), self._preview_table.get_selected_numbers,
+            self._preview_table.get_messages,
         )
 
     def _on_message_changed(self, text):
@@ -242,6 +265,7 @@ class MainWindow(QMainWindow):
         self._send_panel.set_data(
             self._numbers, text.strip(),
             self._preview_table.get_selected_numbers,
+            self._preview_table.get_messages,
         )
 
     def closeEvent(self, event):
@@ -250,6 +274,8 @@ class MainWindow(QMainWindow):
         self._settings.window_height = geo.height()
         self._settings.window_x = geo.x()
         self._settings.window_y = geo.y()
+        self._settings.set_splitter_sizes("send", self._send_splitter.sizes())
+        self._settings.set_splitter_sizes("history", self._history_view.splitter_sizes())
         super().closeEvent(event)
 
     def _on_global_paste(self):
@@ -275,6 +301,9 @@ class MainWindow(QMainWindow):
         combined, dup_count = deduplicate_numbers(combined)
 
         self._on_numbers_changed(combined, skipped, self._row_data)
-        self._status.showMessage(
-            f"Wklejono {len(valid)} numerów ({dup_count} duplikatów usuniętych)"
-        )
+        msg = f"Wklejono {len(valid)} numerów ({dup_count} duplikatów usuniętych)"
+        if skipped:
+            msg += " · pominięto: " + ", ".join(s["value"] for s in skipped[:5])
+            if len(skipped) > 5:
+                msg += f" i {len(skipped) - 5} innych"
+        self._status.showMessage(msg)

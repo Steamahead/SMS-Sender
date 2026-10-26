@@ -11,7 +11,8 @@ from PySide6.QtGui import QKeySequence
 from core.excel_importer import (
     import_from_excel, import_from_csv,
     detect_phone_column, detect_phone_column_csv,
-    get_column_headers, deduplicate_numbers,
+    get_column_headers, deduplicate_with_rows,
+    get_column_headers_csv, read_csv_rows,
 )
 from gui.styles import COLORS
 
@@ -31,7 +32,7 @@ class DropZone(QLabel):
         self.setText("Przeciągnij plik Excel/CSV tutaj\nlub kliknij i wklej numery (Ctrl+V)")
         self.setAlignment(Qt.AlignCenter)
         self.setWordWrap(True)
-        self.setMinimumHeight(72)
+        self.setMinimumHeight(64)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setProperty("class", "dim")
         self._default_style = (
@@ -193,6 +194,7 @@ class ImportPanel(QGroupBox):
         try:
             if is_csv:
                 detected = detect_phone_column_csv(path)
+                self._headers = get_column_headers_csv(path)
             else:
                 detected = detect_phone_column(path)
                 self._headers = get_column_headers(path)
@@ -236,7 +238,7 @@ class ImportPanel(QGroupBox):
             QMessageBox.critical(self, "Błąd importu", str(e))
             return
 
-        valid, dup_count = deduplicate_numbers(valid)
+        valid, row_data, dup_count = deduplicate_with_rows(valid, row_data)
         dup_text = f", {dup_count} duplikatów usuniętych" if dup_count > 0 else ""
 
         self._lbl_summary.setText(
@@ -251,12 +253,8 @@ class ImportPanel(QGroupBox):
 
     def _get_max_columns(self, path: str, is_csv: bool) -> int:
         if is_csv:
-            import csv as csv_mod
-            with open(path, "r", encoding="utf-8") as f:
-                reader = csv_mod.reader(f)
-                for row in reader:
-                    return len(row)
-            return 1
+            rows = read_csv_rows(path)
+            return len(rows[0]) if rows and rows[0] else 1
         else:
             from openpyxl import load_workbook
             wb = load_workbook(path, read_only=True)

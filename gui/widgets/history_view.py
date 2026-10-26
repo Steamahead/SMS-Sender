@@ -12,9 +12,10 @@ from gui.styles import COLORS
 class HistoryView(QWidget):
     """View for browsing SMS sending history."""
 
-    def __init__(self, history_manager: HistoryManager, parent=None):
+    def __init__(self, history_manager: HistoryManager, splitter_sizes=None, parent=None):
         super().__init__(parent)
         self._hm = history_manager
+        self._initial_sizes = splitter_sizes or []
         self._session_ids = []
         self._sessions_cache = []
         self._build_ui()
@@ -26,6 +27,8 @@ class HistoryView(QWidget):
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(8)
+        self._splitter = splitter
 
         sessions_group = QGroupBox("Sesje wysyłek")
         sessions_layout = QVBoxLayout(sessions_group)
@@ -76,6 +79,17 @@ class HistoryView(QWidget):
 
         splitter.addWidget(sessions_group)
 
+        message_group = QGroupBox("Treść SMS-a")
+        message_layout = QVBoxLayout(message_group)
+        message_layout.setContentsMargins(8, 8, 8, 8)
+
+        self._message_view = QTextEdit()
+        self._message_view.setReadOnly(True)
+        self._message_view.setPlaceholderText("Zaznacz sesję, aby zobaczyć pełną treść SMS-a")
+        message_layout.addWidget(self._message_view)
+
+        splitter.addWidget(message_group)
+
         details_group = QGroupBox("Szczegóły sesji")
         details_layout = QVBoxLayout(details_group)
         details_layout.setContentsMargins(8, 8, 8, 8)
@@ -110,8 +124,12 @@ class HistoryView(QWidget):
 
         splitter.addWidget(details_group)
 
-        splitter.setSizes([400, 300])
+        sizes = self._initial_sizes
+        splitter.setSizes(sizes if len(sizes) == 3 else [300, 150, 250])
         layout.addWidget(splitter)
+
+    def splitter_sizes(self) -> list[int]:
+        return self._splitter.sizes()
 
     def refresh(self):
         sessions = self._hm.list_sessions()
@@ -164,6 +182,7 @@ class HistoryView(QWidget):
         if resp == QMessageBox.StandardButton.Yes:
             self._hm.delete_session(sid)
             self._details_table.setRowCount(0)
+            self._message_view.clear()
             self.refresh()
 
     def _on_clear_all(self):
@@ -179,6 +198,7 @@ class HistoryView(QWidget):
         if resp == QMessageBox.StandardButton.Yes:
             self._hm.clear_all()
             self._details_table.setRowCount(0)
+            self._message_view.clear()
             self.refresh()
 
     def _on_session_double_clicked(self, row: int, col: int):
@@ -195,6 +215,8 @@ class HistoryView(QWidget):
         session = self._hm.get_session(self._session_ids[row])
         if not session:
             return
+
+        self._message_view.setPlainText(session.get("message") or "")
 
         recipients = session["recipients"]
         self._details_table.setRowCount(len(recipients))

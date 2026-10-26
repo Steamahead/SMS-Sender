@@ -38,3 +38,28 @@ class TestParseClipboardText:
         text = "512345678\n601234567\n701234567"
         valid, skipped = parse_clipboard_text(text)
         assert len(valid) == 3
+
+
+class TestSeveralNumbersInOneCell:
+    def test_comma_separated_cell(self):
+        valid, skipped = parse_clipboard_text("512 345 678, 600-700-800\n")
+        assert valid == ["+48512345678", "+48600700800"]
+        assert skipped == []
+
+    def test_semicolon_separated_cell(self):
+        valid, _ = parse_clipboard_text("512345678;600700800;+48 601 602 603")
+        assert valid == ["+48512345678", "+48600700800", "+48601602603"]
+
+    def test_cell_with_line_breaks_is_quoted_by_excel(self):
+        # Alt+Enter inside a cell: Excel wraps the cell in quotes when copying.
+        valid, _ = parse_clipboard_text('"512345678\n600700800"\n601602603\n')
+        assert valid == ["+48512345678", "+48600700800", "+48601602603"]
+
+    def test_every_number_in_a_row_is_taken(self):
+        valid, _ = parse_clipboard_text("Anna\t512345678\t600700800\n")
+        assert valid == ["+48512345678", "+48600700800"]
+
+    def test_bad_fragment_is_reported_good_ones_kept(self):
+        valid, skipped = parse_clipboard_text("512345678, 12345")
+        assert valid == ["+48512345678"]
+        assert [s["value"] for s in skipped] == ["12345"]

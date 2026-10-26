@@ -171,8 +171,11 @@ class PhoneLinkSender:
         except Exception:
             return False
 
-    def send_batch(self, numbers: list[str], message: str, on_result=None) -> None:
+    def send_batch(self, numbers: list[str], message, on_result=None) -> None:
         """Send an individual SMS to each number in the batch.
+
+        ``message`` is either one text for everybody or a callable
+        ``message(number) -> str`` giving each recipient their personalized text.
 
         ``on_result(number, ok, error)`` is called once per recipient. With a
         callback the batch runs to completion and the caller decides what a
@@ -192,7 +195,8 @@ class PhoneLinkSender:
             for i, number in enumerate(numbers):
                 self._log(f"  SMS {i+1}/{len(numbers)}: {number}")
                 try:
-                    self._send_single(number, message)
+                    text = message(number) if callable(message) else message
+                    self._send_single(number, text)
                 except PhoneLinkAutomationError as e:
                     self._log(f"  BLAD {number}: {e}")
                     failures.append(f"{number}: {e}")

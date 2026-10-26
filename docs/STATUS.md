@@ -8,11 +8,18 @@ Release: https://github.com/Steamahead/SMS-Sender/releases/tag/2.2.2 (Latest)
 
 **Odbiorcy i tresc**
 - Import numerow: Excel/CSV z auto-detekcja kolumny, drag & drop, Ctrl+V ze schowka
+- CSV z polskiego Excela (srednik, cp1250 / UTF-8 z BOM) — `read_csv_rows`
+- Kilka numerow w jednej komorce (przecinek, srednik, Alt+Enter) — wklejanie i import
 - Reczne wpisywanie numerow telefonu (pole + przycisk Dodaj)
 - Deduplikacja numerow
-- Personalizacja wiadomosci: zmienne {Imie}, {Firma} mapowane na kolumny
+- Personalizacja wiadomosci: zmienne {Imie}, {Firma} mapowane na kolumny —
+  od wersji roboczej po 2.2.2 faktycznie trafia do odbiorcow (wczesniej tylko
+  podglad); ostrzezenie o literowce w zmiennej ({imie} → {Imię}?)
 - Szablony SMS: zapis/odczyt/edycja/usuwanie (JSON)
-- Licznik SMS (znaki + ilosc SMS-ow), limit 500 znakow
+- Licznik SMS liczy prawdziwe czesci (GSM-7 160/153, UCS-2 70/67), limit 700 znakow
+- Przelacznik "Bez polskich znakow" (~2x mniej czesci), "Wyslij test do siebie",
+  potwierdzenie wysylki z liczba czesci i ostrzezeniami (zmienne, MMS)
+- Rozciagane panele (QSplitter) na Wysylce i w Historii, uklad zapamietywany
 - Podglad odbiorcow: tabela z checkboxami, zaznacz/odznacz wszystkie,
   usuwanie pojedynczego numeru, stan checkboxow przezywa edycje wiadomosci
 

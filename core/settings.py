@@ -14,6 +14,9 @@ _DEFAULTS = {
     "last_template": "",
     "gemini_api_key": "",
     "ai_enabled": False,
+    "splitter_sizes": {},
+    "strip_polish": False,
+    "test_number": "",
 }
 
 
@@ -119,3 +122,28 @@ class Settings:
     @ai_enabled.setter
     def ai_enabled(self, value: bool) -> None:
         self._set("ai_enabled", bool(value))
+
+    def splitter_sizes(self, name: str) -> list[int]:
+        sizes = self._data.get("splitter_sizes", {}).get(name, [])
+        return [int(x) for x in sizes]
+
+    def set_splitter_sizes(self, name: str, sizes: list[int]) -> None:
+        stored = dict(self._data.get("splitter_sizes", {}))
+        stored[name] = [int(x) for x in sizes]
+        self._set("splitter_sizes", stored)
+
+    @property
+    def strip_polish(self) -> bool:
+        return bool(self._data["strip_polish"])
+
+    @strip_polish.setter
+    def strip_polish(self, value: bool) -> None:
+        self._set("strip_polish", bool(value))
+
+    @property
+    def test_number(self) -> str:
+        return self._data["test_number"]
+
+    @test_number.setter
+    def test_number(self, value: str) -> None:
+        self._set("test_number", value)

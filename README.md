@@ -35,12 +35,14 @@ Stworzona z myślą o organizacjach pozarządowych (NGO), fundacjach, klubach i 
 
 - Import listy numerów z pliku **Excel (.xlsx)** lub **CSV** — automatycznie wykrywa kolumnę z numerami
 - **Przeciągnij i upuść** plik na okno aplikacji
-- **Wklej ze schowka** (Ctrl+V) — np. skopiowaną kolumnę z Excela
+- **Wklej ze schowka** (Ctrl+V) — np. skopiowaną kolumnę z Excela; kilka numerów w jednej komórce (po przecinku lub średniku) też zadziała
 - **Ręczne dodawanie** pojedynczych numerów
 - **Personalizacja** wiadomości zmiennymi `{Imie}`, `{Firma}` itp. — podstawiane z kolumn w Excelu
 - **Szablony SMS** — zapis, odczyt, usuwanie
 - **Podgląd odbiorców** — tabela z checkboxami (zaznacz/odznacz dowolnych adresatów)
-- **Licznik znaków i SMS‑ów** — wiesz, ile wiadomości pójdzie
+- **Licznik znaków i SMS‑ów** — wiesz, ile części SMS policzy operator (do 700 znaków)
+- **Bez polskich znaków** — jedno kliknięcie i długa wiadomość kosztuje ok. 2× mniej
+- **Wyślij test do siebie** — zobacz SMS na swoim telefonie, zanim pójdzie do całej listy
 - **Deduplikacja** numerów
 - **Historia wysyłek** (SQLite) — max 1000 sesji
 - **Raport po wysyłce** — eksport do XLSX lub CSV

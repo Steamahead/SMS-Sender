@@ -63,3 +63,40 @@ class TestPersonalizer:
             headers=["Imie", "Telefon"],
         )
         assert p.missing_variables() == []
+
+
+class TestRenderForNumbers:
+    def test_each_number_gets_its_own_row(self):
+        from core.personalizer import render_for_numbers
+        msgs = render_for_numbers(
+            "Czesc {Imie}", ["Imie", "Telefon"],
+            ["+48111111111", "+48222222222"],
+            [["Anna", "111111111"], ["Jan", "222222222"]],
+        )
+        assert msgs == {"+48111111111": "Czesc Anna", "+48222222222": "Czesc Jan"}
+
+    def test_number_without_row_gets_the_template_as_is(self):
+        from core.personalizer import render_for_numbers
+        msgs = render_for_numbers("Hej", None, ["+48333333333"], [])
+        assert msgs == {"+48333333333": "Hej"}
+
+
+class TestUnresolved:
+    def test_finds_placeholders_left_in_text(self):
+        from core.personalizer import unresolved_variables
+        assert unresolved_variables("Czesc {imie}, {Firma}!") == ["imie", "Firma"]
+        assert unresolved_variables("Czesc Anna") == []
+
+    def test_strip_polish_applies_after_rendering(self):
+        from core.personalizer import render_for_numbers
+        msgs = render_for_numbers(
+            "Cześć {Imię}", ["Imię", "Tel"], ["+48111111111"], [["Łucja", "1"]],
+            strip_polish=True,
+        )
+        assert msgs == {"+48111111111": "Czesc Lucja"}
+
+    def test_suggestion_for_case_typo(self):
+        from core.personalizer import Personalizer
+        p = Personalizer("Hej {imie}", ["Imię", "Telefon"])
+        assert p.missing_variables() == ["imie"]
+        assert p.suggestion("imie") == "Imię"

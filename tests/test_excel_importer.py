@@ -113,3 +113,16 @@ class TestImportFromCSV:
         valid, skipped = import_from_csv(path)
         assert len(valid) == 2
         assert len(skipped) == 1
+
+
+def test_excel_cell_with_several_numbers_gives_one_entry_each(tmp_path):
+    from core.excel_importer import import_from_excel
+    wb = Workbook()
+    wb.active.append(["Imie", "Telefon"])
+    wb.active.append(["Rodzina Nowak", "512345678; 600700800"])
+    path = str(tmp_path / "lista.xlsx")
+    wb.save(path)
+
+    valid, _, rows = import_from_excel(path, column=1, return_rows=True)
+    assert valid == ["+48512345678", "+48600700800"]
+    assert [r[0] for r in rows] == ["Rodzina Nowak", "Rodzina Nowak"]

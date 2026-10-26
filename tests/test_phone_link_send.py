@@ -304,6 +304,15 @@ class TestFailuresAreNeverSilent:
 
         assert results == [("+48111111111", True), ("+48222222222", True)]
 
+    def test_batch_sends_each_recipient_their_own_text(self, fake_app):
+        texts = {"+48111111111": "Czesc Anna", "+48222222222": "Czesc Jan"}
+        PhoneLinkSender().send_batch(
+            list(texts), texts.get,
+            on_result=lambda number, ok, error: None,
+        )
+
+        assert fake_app.sent == list(texts.items())
+
     def test_batch_reports_failure_and_continues(self, fake_app):
         results = []
         original = PhoneLinkSender._send_single
